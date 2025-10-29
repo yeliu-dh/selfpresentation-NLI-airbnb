@@ -3,15 +3,19 @@
 ## 🧠 Résumé
 Basé sur la théorie du managment d'impression de Goffman, ce projet explore comment les hôtes d’Airbnb se présentent dans leurs descriptions personnelles, à l'aide d'un modèle de zéro-shot classification et examine l'enjeu socio-économique des tactiques via les modèles de régression OLS.
 
+## 🏷️ Mots-clés
+Humanités numériques · Goffman · Présentation de soi · Managment d'impression · Airbnb · Zero-shot Classification · Psychométrie ·  Traitement automatique du language naturel · Analyse sémantique
+
 ## 💡 5 tactiques identifiées :
 ### personnalité :
-- **Ouverture**  
-- **Authenticité**  
-- **Sociabilité**
+- **Ouverture** : 'open to different cultures', 'cosmopolitan','international view', 'cultural exchange'
+- **Authenticité** : 'personal life', 'life experiences', 'divers interests', 'hobbies', 'enjoy life'
+- **Sociabilité**: 'meet new people', 'welcoming', 'friendly', 'sociable', 'interpersonal interaction'
+
 
 ### marketing :
-- **Auto-promotion**  
-- **Exemplarité**
+- **Auto-promotion** : 'thoughtful service', 'attentive to needs', 'willing to help', 'responsive'
+- **Exemplarité** : 'fan of Airbnb', 'Airbnb community','love Airbnb', 'travel with Airbnb'
   
 
 ## 📊 Résultats principaux
@@ -22,11 +26,8 @@ Basé sur la théorie du managment d'impression de Goffman, ce projet explore co
 
 ## 📁 Structure du projet
 - `code/` — Scripts principaux d’analyse et de traitement
-  - `experiments/` — Scripts exploratoires ou essais préliminaires
-- `data/` — Données brutes issues des listings Airbnb
-- `resultats/` — Résultats finaux (ex : classification zéro-shot)
-- `images/` — Visualisations générées à partir des analyses
-- `README.md` — Présentation du projet et mode d’emploi
+-  `corpus/` — Données brutes issues des listings Airbnb
+- `data/` — Données traitées en fonction de langue et la version qui inclut les scores de zéro-shot classification
+- `figs/` — Visualisations générées à partir des analyses
+- `result_models/` — Données combinées, inclus les scores de zsc et les scores fusionnées en fonction de tactiques 
 
-## 🏷️ Mots-clés
-Humanités numériques · Goffman · Présentation de soi · Managment d'impression · Airbnb · Zero-shot Classification · Psychométrie ·  Traitement automatique du language naturel · Analyse sémantique
