@@ -16,22 +16,28 @@ from mpl_toolkits.mplot3d import Axes3D
 
 
 
-def run_check_fa(df, labels, n_factors=5, rotation="oblimin", get_factor_scores_by='mean',
-                output_folder="fa_results", 
-                get_heatmap=True, get_cronbachs_a=True,
+def run_check_fa(df, labels,output_folder="fa_results", 
+                n_factors=5, rotation="oblimin", 
+                fa_names=None,
+                get_factor_scores_by='both',
+                run_scores_fa_on="mean",
+                get_data_heatmap=True, get_cronbachs_a=True,
                 get_barplot=False, get_pca3d=False, 
-                get_table=True,):
+                get_table=True,low_comm_t=0.5):
     
     
     # 英语提示，但是图片标题用法语！
     #output
     os.makedirs(output_folder, exist_ok=True)
+    print(f"[INFO] all results saved to folder {output_folder}!\n")
 
     ###============================RUN==============================###
-
+    print(f"============================RUN FA=================================")
     #-------------------------- check data -----------------------------
-    if not labels in df.columns:
-        print(f"[WARNING] labels not in df.columns!!\n")
+    missing_labels = [col for col in labels if col not in df.columns]
+    if missing_labels:
+        print(f"[WARNING] These labels are missing: {missing_labels}\n")
+
     else :
         df_dropna=df[df[labels].sum(axis=1)!=0]
         data=df_dropna[labels]
@@ -48,50 +54,116 @@ def run_check_fa(df, labels, n_factors=5, rotation="oblimin", get_factor_scores_
     fa.fit(data)
     ### output impo :fa, data
 
-
-    # ---------------------------fa scores -------------------------------
-    if get_factor_scores_by=="mean":
-        print()
-              
-
-
-    elif get_factor_scores_by=="transform":
-        scores_fa = fa.transform(data)
-        print(f"[INFO] scores shape (len(data),n_factors) :{scores_fa.shape}\n"
-              f"scores got by transforme are")
-    
-        
-    else :
-        print(f"[WARNING] choose from 'mean' or 'transform'!!")
-
-        
-        
-        
-    
-    
-    
-    
-    ###============================CHECK==============================###
-    
-    # ---------------------------heatmap-------------------------------
-    if get_heatmap==True:    
+    print("---------------------------heatmap of zsc-------------------------------")
+    if get_data_heatmap==True: 
         loadings = fa.loadings_
         print(f"[INFO] good loadings > 0.5")
         
+        if fa_names :
+            loadings_df=pd.DataFrame(loadings, index=data.columns, columns=fa_names)
+        else :
+            loadings_df=pd.DataFrame(loadings, index=data.columns)  
+    
         plt.figure(figsize=(10,8))
-        loadings_df=pd.DataFrame(loadings, index=data.columns)
         sns.heatmap(loadings_df, annot=True, cmap='coolwarm')
-        plt.title('Factors loadings des items')
+        plt.title('Charges factorielles des items')
         # plt.xticks(rotation=45)
         plt.tight_layout()
         outpath_heatmap=os.path.join(output_folder, 'heatmap_fa.jpeg')
         plt.savefig(outpath_heatmap, dpi=300)
         plt.show()
         print(f"[SAVE] heatmap saved to {outpath_heatmap}!\n")
+
+    print("---------------------------------fa scores ---------------------------------")
+    # 从原始 df 中筛选非空行 (df_dropna) 做 FA
+    # 得到 FA scores (df_scores) (无id索引)！
+    # 拼接回 df_dropna → 得到 df_tactics
+    # 按 "host_about" 去重 → df_bio_tactics
+    # 最后再 merge 回原始 df → listings_tactics
+    
+    # init，空的df不会拼接上
+    df_scores_mean=pd.DataFrame()
+    df_scores_weighted=pd.DataFrame()
+    
+    if get_factor_scores_by  in ["mean","both"]:
+        print(f"[INFO] calulate factor score by taking the average of its corresponding items, ref to a pre-defined map.\n")
+        fa_item_map={
+            "ouverture":['open to different cultures','cosmopolitan','international view','cultural exchange'],
+            "authenticité":['personal life','life experiences','divers interests','hobbies','enjoy life'],
+            'sociabilité':['meet new people', 'welcoming', 'friendly','sociable', 'interpersonal interaction'],
+            'auto_promotion':['thoughtful service', 'attentive to needs','willing to help','responsive'],
+            'exemplarité':["fan of Airbnb","Airbnb community",'love Airbnb', 'travel with Airbnb']
+        }
+        fa_scores_mean = pd.DataFrame(index=data.index)
+        for f, items in fa_item_map.items():
+            fa_scores_mean[f'{f}_mean'] = data[items].mean(axis=1)
+        df_scores_mean=pd.DataFrame(fa_scores_mean).reset_index(drop=True)
+
+    if get_factor_scores_by in ["transform","both"]:
+        fa_scores_weighted = fa.transform(data)
+        df_scores_weighted=pd.DataFrame(fa_scores_weighted).reset_index(drop=True)
+        if fa_names:
+            df_scores_weighted.columns=[f"{col}_weighted" for col in fa_names]
+    
+    if get_factor_scores_by not in ['mean','transform', 'both']:
+        print(f"[WARNING] choose from 'mean' or 'transform'!!")
+
+    df_scores=pd.concat([df_scores_mean, df_scores_weighted],axis=1)       
+
+
+
+    print("------------------------heatmap of fa scores(tactcis)----------------------------")
+    # init fa
+    fa_scores = FactorAnalyzer(n_factors=2, rotation='oblimin', method='minres')
+    
+    get_heatmap_scores=False
+    if run_scores_fa_on=='mean' and not df_scores_mean.empty:        
+        fa_scores.fit(df_scores_mean)
+        df_scores_hm=df_scores_mean
+        get_heatmap_scores=True
+    elif run_scores_fa_on=='weighted' and not df_scores_weighted.empty:
+        fa_scores.fit(df_scores_weighted)
+        df_scores_hm=df_scores_weighted
+
+        get_heatmap_scores=True
+    else :
+        get_heatmap_scores=False
+        
+    if get_heatmap_scores==True:
+        loadings_scores = fa_scores.loadings_
+        loadings_scores_df=pd.DataFrame(loadings_scores, index=df_scores_hm.columns)
+        sns.heatmap(loadings_scores_df, annot=True, cmap='coolwarm')
+        plt.title(f'Charge factorielles des tactiques (scores {run_scores_fa_on})')
+        plt.tight_layout()
+        scores_mean_heatmap_outpath=os.path.join(output_folder,f'heatmap_fa_scores_{run_scores_fa_on}.jpg')
+        plt.savefig(scores_mean_heatmap_outpath,dpi=300)
+        plt.show()
+        print(f"[SAVE] heatmap of mean scores saved to {scores_mean_heatmap_outpath}!\n")
+
+
+
+    print("----------------------------merge data to listings---------------------------------")
+    df_dropna = df_dropna.reset_index(drop=True)
+    df_scores=df_scores.reset_index(drop=True)
+    df_tactics=pd.concat([df_dropna, df_scores_weighted], axis=1)# horizontal
+    
+    df_bio_tactics=df_tactics.drop_duplicates(subset="host_about")
+    listings_tactics=df.merge(df_bio_tactics, left_on='host_about', right_on='host_about', how="left")
+    
+    outpath_listings_tactics=os.path.join(output_folder, 'lisitngs_tactics.csv')
+    listings_tactics.to_csv(outpath_listings_tactics, index=False)
+    
+    print(f"[INFO] scores shape (len(data), 1/2*n_factors) :{df_scores.shape}\n"
+            f"len(df_dropna) should == len(df_scores)==len(df_tactics): {len(df_dropna)}, {len(df_scores)}, {len(df_tactics)}\n"
+            f"len(df)==len(listings_tactics):{len(df)},{len(listings_tactics)}\n")
+    print(f"[SAVE] listings with tactics scores by '{get_factor_scores_by}'way saved to {outpath_listings_tactics}!!\n")
             
         
-    # ---------------------------cronbach's alpha-------------------------------
+    
+    print("###====================================CHECK=======================================###")   
+
     if get_cronbachs_a==True:
+        print("---------------------------cronbach's alpha-------------------------------")
         print(f"[INFO] good alpha > 0.7\n")
         print(f"Cronbach's alpha checks internal consistency, whether items mesure a lantent construct !\n")
         
@@ -108,8 +180,8 @@ def run_check_fa(df, labels, n_factors=5, rotation="oblimin", get_factor_scores_
             print(f"- {tactic}: {alpha}")                
         
         
-    # -----------------------------comm&uniq-------------------------------
     if get_barplot==True:        
+        print(f"\n-----------------------------barplot comm&uniq-------------------------------")
         communalities = fa.get_communalities()
         uniqueness = fa.get_uniquenesses()
         print(f"[INFO] mean COMM (> 0.6):{communalities.mean()}\n"
@@ -145,8 +217,8 @@ def run_check_fa(df, labels, n_factors=5, rotation="oblimin", get_factor_scores_
         # # plt.savefig('../figs/communalities_uniqueness.jpeg', dpi=300)
         # plt.show()
     
-    # -----------------------------3D PCA-------------------------------
     if get_pca3d==True:
+        print("# -----------------------------3D PCA-------------------------------")
         pca_3d=PCA(n_components=3)
         loadings_3d=pca_3d.fit_transform(loadings)
         fig = plt.figure(figsize=(15,15))
@@ -180,17 +252,18 @@ def run_check_fa(df, labels, n_factors=5, rotation="oblimin", get_factor_scores_
 
         plt.title('3D PCA Correlation Circle (Scaled)')
         plt.tight_layout()
-        # plt.savefig("../figs/CC3D.jpg",dpi=300)
+        outpath_pca=os.path.join(output_folder, 'pca_3d.jpg')
+        plt.savefig(outpath_pca,dpi=300)
         plt.show()
+        print(f"[SAVE] PCA 3D saved to {outpath_pca}!\n")
+        
+        
 
-
-    # -----------------------------tab-------------------------------
     if get_table==True:
+        print("# ------------------------------------tab------------------------------------")
         loadings = fa.loadings_
         communalities = fa.get_communalities()
         uniqueness = fa.get_uniquenesses()
-        print(f"[INFO] mean COMM (> 0.6):{communalities.mean()}\n"
-            f"[INFO] mean UNIQ : {uniqueness.mean()}\n")
 
         # gamma 和 sigma
         abs_loadings = np.abs(loadings)
@@ -198,32 +271,58 @@ def run_check_fa(df, labels, n_factors=5, rotation="oblimin", get_factor_scores_
         sigma = np.sort(abs_loadings, axis=1)[:, -2]       # 第二大因子载荷
 
         # get DataFrame
+        desired_order = None  # 先定义，保证一定存在
+        if fa_names:
+            fa_names=fa_names
+            desired_order=['gamma','sigma','ouverture','authenticité','sociabilité',"auto_promotion","exemplarité",'communalité','spécificité']
+            
+        else :
+            fa_names=[f"Factor{i+1}" for i in range(0, loadings.shape[1])]
+            
         columns = ['gamma', 'sigma'] + \
-                [f'Factor{i+1}' for i in range(loadings.shape[1])] + \
-                ['communality', 'uniqueness']
+                fa_names + \
+                ["communalité","spécificité"]
+                # ['communality', 'uniqueness']
 
-        df = pd.DataFrame(
+        df_fa = pd.DataFrame(
             np.column_stack([gamma, sigma, loadings, communalities, uniqueness]),
             index=data.columns,
             columns=columns
         )
-
-        # df.rename(columns={'Factor1':"exemplarité",
-        #                 'Factor2':"sociabilité",
-        #                 'Factor3':"hospitalité",
-        #                 'Factor4':"auto-promotion",
-        #                 'Factor5':"ouverture"},
-        #         inplace=True)
+        df_fa.round(3)
         
-        # desired_order=['gamma','sigma','ouverture','sociabilité',"hospitalité","auto-promotion","exemplarité"]
-        # df=df[desired_order]
+        # reorder 
+        # desired_order=['gamma','sigma','ouverture','authenticité','sociabilité',"auto_promotion","exemplarité",'communalité','spécificité']
+        if desired_order:
+            df_fa=df_fa[desired_order]
+            
+        display(df_fa)
+        
+        #info
+        print(f"[INFO] mean COMM (> 0.6):{communalities.mean()}\n"
+                    f"[INFO] mean UNIQ : {uniqueness.mean()}\n")
+        low_comm_t=0.5
+        low_comm_items = df_fa[df_fa['communalité'] <low_comm_t ]
+        print(f"[WARNING] {len(low_comm_items)}/{len(df_fa)} low communality items (< {low_comm_t}):\n{';'.join(low_comm_items.index)}\n")
 
-        df.round(3)
+        # save
         outpath_tab=os.path.join(output_folder, 'table_fa.csv')
-        df.to_csv(outpath_tab, index=False)
+        df_fa.to_csv(outpath_tab, index=False)
         print(f"[SAVE] table saved to {outpath_tab}!\n")
-    
-   
         
-
+        # -----------------------------tab2latex-------------------------------                
+        latex_code = df_fa.round(3).to_latex(
+            caption="Tableau de l'analyse factorielle",
+            label="tab:fa_table",
+            index=True,        # 是否保留行索引（item 名称）
+            escape=False       # False 可以保留 LaTeX 特殊字符，比如 _ 等
+        )
+        outpath_tab_latex=os.path.join(output_folder, 'table_fa_latex.tex')
+        with open(outpath_tab_latex, 'w') as f:
+            f.write(latex_code)
+        print(f"[SAVE] table latex saved to {outpath_tab_latex}!\n")   
+        print(f"[WARNING] remember to rename factors by heatmap of zsc data!!!")            
+      
+        
+        
     return 
