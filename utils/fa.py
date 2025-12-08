@@ -29,7 +29,8 @@ def run_check_fa(df, labels,output_folder="fa_results",
     # 英语提示，但是图片标题用法语！
     #output
     os.makedirs(output_folder, exist_ok=True)
-    print(f"[INFO] all results saved to folder {output_folder}!\n")
+    print(f"[INFO] all results saved to folder {output_folder}!\n"
+          f"INITIALISE df, or MERGE go WRONG!!!")
 
     ###============================RUN==============================###
     print(f"============================RUN FA=================================")
@@ -121,6 +122,7 @@ def run_check_fa(df, labels,output_folder="fa_results",
         fa_scores.fit(df_scores_mean)
         df_scores_hm=df_scores_mean
         get_heatmap_scores=True
+    
     elif run_scores_fa_on=='weighted' and not df_scores_weighted.empty:
         fa_scores.fit(df_scores_weighted)
         df_scores_hm=df_scores_weighted
@@ -145,14 +147,16 @@ def run_check_fa(df, labels,output_folder="fa_results",
     print("----------------------------merge data to listings---------------------------------")
     df_dropna = df_dropna.reset_index(drop=True)
     df_scores=df_scores.reset_index(drop=True)
-    df_tactics=pd.concat([df_dropna, df_scores_weighted], axis=1)# horizontal
+    df_tactics=pd.concat([df_dropna, df_scores], axis=1)# horizontal
     
     df_bio_tactics=df_tactics.drop_duplicates(subset="host_about")
+    cols_tosave=["host_about"]+df_scores.columns.tolist()
+    df_bio_tactics=df_bio_tactics[cols_tosave]
     listings_tactics=df.merge(df_bio_tactics, left_on='host_about', right_on='host_about', how="left")
     
     outpath_listings_tactics=os.path.join(output_folder, 'lisitngs_tactics.csv')
     listings_tactics.to_csv(outpath_listings_tactics, index=False)
-    
+    display(listings_tactics.head())
     print(f"[INFO] scores shape (len(data), 1/2*n_factors) :{df_scores.shape}\n"
             f"len(df_dropna) should == len(df_scores)==len(df_tactics): {len(df_dropna)}, {len(df_scores)}, {len(df_tactics)}\n"
             f"len(df)==len(listings_tactics):{len(df)},{len(listings_tactics)}\n")
@@ -175,9 +179,19 @@ def run_check_fa(df, labels,output_folder="fa_results",
             'self_promotion':['thoughtful service', 'attentive to needs','willing to help','responsive'],
             'exemplification':["fan of Airbnb","Airbnb community",'love Airbnb', 'travel with Airbnb']
         }
+        dict_alpha={}
         for tactic, labels in labels2tac.items():
             alpha, _ = cronbach_alpha(data[labels])
-            print(f"- {tactic}: {alpha}")                
+            # print(f"- {tactic}: {alpha}")          
+            dict_alpha[tactic]=alpha
+        dict_alpha_df = pd.Series(dict_alpha, name='cronbach_alpha').reset_index()
+        dict_alpha_df.columns = ['tactique', 'cronbach_alpha']
+        display(dict_alpha_df)
+        outpath_alpha=os.path.join(output_folder, "cronbachs_alpha.csv")
+        dict_alpha_df.to_csv(outpath_alpha, index=False)
+        print(f"[SAVE] cronbach's alpha on items saved to {outpath_alpha}!\n")
+
+
         
         
     if get_barplot==True:        
