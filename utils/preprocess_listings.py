@@ -1,3 +1,6 @@
+## unzip + split + host_vars + proxy_obj_vars + desc + profile 
+
+
 import pandas as pd
 import os 
 import time
@@ -288,11 +291,6 @@ def save_global_change_stable_csv(csv_files, year:str, location:str, output_fold
 
 
 
-
-
-
-
-
 ##=============================DESC STAT=====================================##
 
 
@@ -343,6 +341,8 @@ def desc_catORnum(df, vars):
 
 
 
+
+
 ##==================================HOST VARS============================================##
 
 import langid #这个库速度更快、稳定性高。
@@ -374,7 +374,7 @@ def preprocess_host_variables(df_raw):
     print(f"\n\n******************************HOST VARS******************************\n"
           f"PROCESS PIPELINE :\n"
           f"- host_is_sueprhost: fillna('f')\n"
-          f"- review_scores_rating: {print_nan_ratio(df, col='review_scores_rating')*100}% NaN, ADD 'has_rating' :1/0'\n"
+          f"- review_scores_rating: {print_nan_ratio(df, col='review_scores_rating')*100}% NaN; fillna(0), to numeric; ADD 'has_rating' :1/0'\n"
           f"- host_since: ADD 'years_since_host' :float, 0.5-1 year=>1， 0-0.5 year => 0 \n"
           f"- has_host_about: ADD 'has_host_about':1/0','lang:en/fr/other_langs','len:int',\n"
           f"- host_response_time:{print_nan_ratio(df, col='host_response_time')*100}% NaN, fillna('no_response_time') \n"
@@ -406,6 +406,8 @@ def preprocess_host_variables(df_raw):
                 # 双变量法：相当于把有/无评分的分开，所以原列中可以fillna(0); 区分信号存在/强度
                 df['has_rating'] = df['review_scores_rating'].notna().astype(int)
                 df['review_scores_rating'] = df['review_scores_rating'].fillna(0)
+                df['review_scores_rating'] = pd.to_numeric(df['review_scores_rating'], errors='coerce')
+
 
             elif var=='host_since':
                 # host_since:增加一列years_since_host，少于半年填0，少于1年填1
@@ -725,9 +727,43 @@ def group_mean_table(df, cols, group_col='host_is_superhost'):
 
 
 
-
-def get_superhost_profile(df):
-    return 
+from scipy.stats import ttest_ind
+def group_mean_table_ttest(df, cols, group_col='host_is_superhost'):
+    """
+    返回均值表 + t-test p-value列
+    """
+    # 或者只筛选非数值列
+    non_numeric_cols = [c for c in cols if not pd.api.types.is_numeric_dtype(df[c])]
+    if len(non_numeric_cols)>0:
+        print(f"[WARNING] non_numeric_cols:\n {'; '.join(non_numeric_cols)}")
+    
+    ## init res df
+    result = pd.DataFrame(index=cols, columns=['Superhôte', 'Autres', 'ttest_p'])
+    
+    for col in cols:
+        group1 = df[df[group_col]=='t'][col].dropna()
+        group2 = df[df[group_col]!='t'][col].dropna()
+        
+        result.loc[col, 'Superhôte'] = group1.mean()
+        result.loc[col, 'Autres']   = group2.mean()
+        
+        # t-test
+        _, p = ttest_ind(group1, group2, equal_var=False)  # Welch t-test
+        result.loc[col, 'ttest_p'] = p
+    
+  
+        # 显著性星号
+        if p < 0.001:
+            sig = '***'
+        elif p < 0.01:
+            sig = '**'
+        elif p < 0.05:
+            sig = '*'
+        else:
+            sig = ''
+        result.loc[col, 'significance'] = sig
+    
+    return result
 
 
 # def compute_booking_rate(row):

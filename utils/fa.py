@@ -324,6 +324,8 @@ def run_check_fa(df, labels,output_folder="fa_results",
         df_fa.to_csv(outpath_tab, index=False)
         print(f"[SAVE] table saved to {outpath_tab}!\n")
         
+        
+        
         # -----------------------------tab2latex-------------------------------                
         latex_code = df_fa.round(3).to_latex(
             caption="Tableau de l'analyse factorielle",
