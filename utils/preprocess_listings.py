@@ -99,7 +99,7 @@ def preprocess_host_variables(df_raw):
                 "host_response_time","host_response_rate","calculated_host_listings_count"]
     print(f"\n\n******************************HOST VARS******************************\n"
           f"PROCESS PIPELINE :\n"
-          f"- host_is_sueprhost: fillna('f')\n"
+          f"- host_is_sueprhost: check ONLY 't'/'f'; fillna('f')\n"
           f"- review_scores_rating: {print_nan_ratio(df, col='review_scores_rating')*100}% NaN; fillna(0), to numeric; ADD 'has_rating' :1/0'\n"
           f"- host_since: ADD 'years_since_host' :float, 0.5-1 year=>1， 0-0.5 year => 0 \n"
           f"- has_host_about: ADD 'has_host_about':1/0','lang:en/fr/other_langs','len:int',\n"
@@ -115,6 +115,7 @@ def preprocess_host_variables(df_raw):
         else :
             if var=='host_is_superhost':
                 # host_is_superhost :对缺失superhost的填f
+                df['host_is_superhost']=df['host_is_superhost'].apply(lambda x : x if x in ['t', 'f'] else None)
                 df['host_is_superhost']=df['host_is_superhost'].fillna('f')
 
             elif var=='review_scores_rating':
@@ -379,11 +380,11 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
         
         f"3) obj vars :\n "
         f"- instant_bookable : fillna('f')\n"
-        f"- minimum_nights : only allows int, else NaN, fillna(0), all values tranformed numeric"
+        f"- minimum_nights : to_numeric, fillna(0)"
         
         
-        f"3) filter : dropna on vars ==> get df_filtered \n\n"
-        "desc statistique :{', '.join(obj_vars)} \n\n"
+        f"3) filter : dropna on vars ==> desc df_filtered \n\n"
+        f"desc statistique :{', '.join(obj_vars)} \n\n"
         
         f"4) if enter 'threshold_km':\n"
         f"location :'latitude','longitude': ADD 'is_within_Xkm'\n"
@@ -411,18 +412,19 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
         df["instant_bookable"]=df["instant_bookable"].fillna("f")
         
     if "minimum_nights" in obj_vars:# 又不是数字的值: 2023-12-12
-        df["minimum_nights"]=df["minimum_nights"].apply(lambda x : x if isinstance(x, float) else None)
+        df['minimum_nights'] = pd.to_numeric(df.minimum_nights, errors='coerce')#无法转换的会变成nan
         df["minimum_nights"]=df["minimum_nights"].fillna(0)
-        df["minimum_nights"]=pd.to_numeric(df['minimum_nights'], errors='coerce')#强制变成数值
+
         
     vars_to_dropna.extend(obj_vars)
     
-    print('# -----------------------location----------------------')
     if threshold_km!=None:    
+        print('# -----------------------location------------------------')
         df=add_is_within_km(df,threshold_km=3)
         vars_to_dropna.extend(f'is_within_{threshold_km}km')
         
     print("# --------------------filter & desc----------------------")
+    vars_to_dropna=list(set(vars_to_dropna))
     df_filtered=filter_df(df,vars=vars_to_dropna)
     desc_catORnum(df=df_filtered, vars=vars_to_dropna) 
     
