@@ -327,8 +327,13 @@ def desc_catORnum(df, vars):
 
             # ② 输出方式
             if is_categorical:
+                if np.nan in col.value_counts(dropna=False):
+                    print(f"[WARINNG] NaN in {var}!!")
+                else :
+                    print(f"no NaN in {var}:)")
                 print(col.value_counts(dropna=False).sort_values(ascending=False), "\n")
-            else:# 数值型，自动滤过了nan！！
+                
+            else:# 数值型，自动滤过了nan！！要手动打印在返回process处理！
                 print(f"- {var}: {print_nan_ratio(df, col=var)*100}% NaN !\n"
                     f"- {var}: {print_zero_ratio(df, col=var)*100}% 0 !\n")
                 
@@ -382,16 +387,6 @@ def preprocess_host_variables(df_raw):
           f"- calculated_host_listings_count : ADD 'professional_host:1/0'\n"
           )
     
-    # print(f"\n\n******************************HOST VARS******************************\n"
-    #       f"PROCESS METHODS :\n"
-    #       f"- host_is_sueprhost: fillna('f')\n"
-    #       f"- review_scores_rating: 缺失严重，新增一列, 'has_rating:1/0'\n"
-    #       f"- host_since: 新增1列years_since_host :float, 按照ab页面显示计算年数，0.5-1年填1， 0-0.5年填0 \n"
-    #       f"- has_host_about:新增3列'has_host_about:1/0','lang:en/fr/other_langs','len:int',\n"
-    #       f"- host_response_time: fillna('no_response_time') \n"
-    #       f"- host_response_rate:缺失严重，增加一列has_response_rate:1/0， fillna(0)\n"
-    #       f"- calculated_host_listings_count : 新增1列'professional_host:1/0'\n"
-    #       )
     
     for var in var_toprocess:
         if not var in df.columns :
@@ -405,8 +400,8 @@ def preprocess_host_variables(df_raw):
                 #review_scores_rating:对缺失评分（数值）增加一列has_rating：有为1，无为0;
                 # 双变量法：相当于把有/无评分的分开，所以原列中可以fillna(0); 区分信号存在/强度
                 df['has_rating'] = df['review_scores_rating'].notna().astype(int)
+                df['review_scores_rating'] = pd.to_numeric(df['review_scores_rating'], errors='coerce')#有文本？？先转数字再填？
                 df['review_scores_rating'] = df['review_scores_rating'].fillna(0)
-                df['review_scores_rating'] = pd.to_numeric(df['review_scores_rating'], errors='coerce')
 
 
             elif var=='host_since':
@@ -684,6 +679,9 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
         all_vars.extend(['number_of_reviews_l30d',"booking_rate_l30d"])#?
     
     # obj vars :
+    if "instant_bookable" in obj_vars:
+        df["instant_bookable"]=df["instant_bookable"].fillna("f")
+   
     all_vars.extend(obj_vars)
     
     # location:
@@ -702,6 +700,20 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
     return df_filtered
 
 
+
+def save_csv_as_latex(table_csv, output_path,caption, label):
+    latex_code = table_csv.round(3).to_latex(
+            caption=caption,
+            label=label,
+            index=True,        # 是否保留行索引（item 名称）
+            escape=False       # False 可以保留 LaTeX 特殊字符，比如 _ 等
+        )
+    # print(f"LATEX : \n {latex_code}")
+    with open(output_path, 'w') as f:
+        f.write(latex_code)
+    print(f"[SAVE] table latex saved to {output_path}!\n")   
+    
+    return 
 
 
 
@@ -727,20 +739,25 @@ def group_mean_table(df, cols, group_col='host_is_superhost'):
 
 
 
-from scipy.stats import ttest_ind
-def group_mean_table_ttest(df, cols, group_col='host_is_superhost'):
+def group_mean_table_ttest(df, cols, group_col='host_is_superhost', output_folder="mod_results"):
+
     """
     返回均值表 + t-test p-value列
     """
+    from scipy.stats import ttest_ind
+
     # 或者只筛选非数值列
     non_numeric_cols = [c for c in cols if not pd.api.types.is_numeric_dtype(df[c])]
     if len(non_numeric_cols)>0:
-        print(f"[WARNING] non_numeric_cols:\n {'; '.join(non_numeric_cols)}")
+        print(f"[WARNING] non_numeric_cols:\n {'; '.join(non_numeric_cols)}\n")
+    
+    numeric_cols=[c for c in cols if c not in non_numeric_cols]
+    print(f"Table of Superhost and others in {len(numeric_cols)} dimensions:\n")
+    
     
     ## init res df
-    result = pd.DataFrame(index=cols, columns=['Superhôte', 'Autres', 'ttest_p'])
-    
-    for col in cols:
+    result = pd.DataFrame(index=numeric_cols, columns=['Superhôte', 'Autres', 'ttest_p'])
+    for col in numeric_cols:
         group1 = df[df[group_col]=='t'][col].dropna()
         group2 = df[df[group_col]!='t'][col].dropna()
         
@@ -762,8 +779,165 @@ def group_mean_table_ttest(df, cols, group_col='host_is_superhost'):
         else:
             sig = ''
         result.loc[col, 'significance'] = sig
+    # result=result.sort_values(by="ttest_p", ascending=True)
+    # save csv and latex:
+    outpath_latex=os.path.join(output_folder, 'table_host_latex.tex')
+    
+    outpath_csv=os.path.join(output_folder, 'table_host.csv')    
+    result.to_csv(outpath_csv, index=False)
+    print(f"[SAVE] table host csv saved to {outpath_csv}!\n")  
+    
+    save_csv_as_latex(table_csv=result, 
+                      output_path=outpath_latex, 
+                      caption="Tableau du profil des Superhôtes et des Autres",
+                      label="tab:table_host")
+
+
+     
     
     return result
+
+
+# def check_vif (df,x_vars, y_var):
+#     from statsmodels.stats.outliers_influence import variance_inflation_factor
+#     from patsy import dmatrices    
+#     # 确保因变量不在自变量里
+#     if y_var in x_vars:
+#         x_vars.remove(y_var)
+    
+#     # # 把数值型和类别型分开：
+#     # for var in x_vars :
+#     #     if len(df[df[var].isna()])!=0:#不够稳健,检查不出空字符串和"nan"?
+#     #         print(f'[warning] {var} has nan!!')
+#     for var in x_vars:
+#         s = df[var]
+#         missing = s.isna() | (s.astype(str).str.strip() == '') | (s.astype(str).str.lower() == 'nan')
+#         # 同时检测：NaN, 空字符串, 'nan' 字符串
+#         if missing.any():
+#             print(f'[warning] {var} has {missing.sum()} missing values!')
+
+#     # non_numeric_x = [c for c in x_vars if not pd.api.types.is_numeric_dtype(df[c])]
+#     # numeric_x=[c for c in x_vars if c not in non_numeric_x]
+
+#     # print(f"[INFO] non_numeric_cols :{'; '.join(non_numeric_x)}\n"
+#     #         f"[INFO] numeric_cols :{'; '.join(numeric_x)}\n")
+
+#     # formula = y_var + ' ~ ' + ' + '.join(numeric_x + [f'C({v})' for v in non_numeric_x])
+    
+#     # y, X = dmatrices(formula, data=df, return_type='dataframe')
+    
+#     # # 计算 VIF
+#     # vif_df = pd.DataFrame()
+#     # vif_df['Variables'] = X.columns
+#     # vif_df['VIF'] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
+#     # display(vif_df)
+    
+#     # return vif_df     
+def check_vif(df, x_vars, y_var):
+    from statsmodels.stats.outliers_influence import variance_inflation_factor
+    from patsy import dmatrices
+    import pandas as pd
+
+    df = df.copy()
+
+    if y_var in x_vars:
+        x_vars.remove(y_var)
+
+    # 检查缺失值（更稳健）
+    for var in x_vars:
+        s = df[var]
+        missing = s.isna() | (s.astype(str).str.strip() == '') | (s.astype(str).str.lower() == 'nan')
+        if missing.any():
+            print(f'[warning] {var} has {missing.sum()} missing values!')
+
+    # 分类/数值区分
+    numeric_x = [c for c in x_vars if pd.api.types.is_numeric_dtype(df[c])]
+    non_numeric_x = [c for c in x_vars if c not in numeric_x]
+
+    print(f"[INFO] numeric_cols : {numeric_x}")
+    print(f"[INFO] non_numeric_cols : {non_numeric_x}")
+
+    # 填充缺失值
+    df[numeric_x] = df[numeric_x].fillna(0)
+    for c in non_numeric_x:
+        df[c] = df[c].fillna('missing')
+
+    # 公式
+    # formula = y_var + ' ~ ' + ' + '.join(numeric_x + [f'C({v})' for v in non_numeric_x])
+    formula = y_var + ' ~ ' + ' + '.join(numeric_x + [f'C({v})' for v in non_numeric_x])
+
+    # dmatrices
+    y, X = dmatrices(formula, data=df, return_type='dataframe')
+
+    # VIF
+    vif_df = pd.DataFrame()
+    vif_df['Variables'] = X.columns
+    vif_df['VIF'] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
+
+    display(vif_df)
+    return vif_df
+
+
+
+
+
+
+
+
+
+
+from patsy import dmatrices
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+import pandas as pd
+import re
+from patsy import dmatrices
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+import pandas as pd
+
+def check_vif_safe(df_input, x_vars, y_var):
+    import re
+    df = df_input.copy()
+
+    if y_var in x_vars:
+        x_vars = [v for v in x_vars if v != y_var]
+
+    numeric_x = []
+    cat_x = []
+    for c in x_vars:
+        if pd.api.types.is_numeric_dtype(df[c]):
+            numeric_x.append(c)
+        else:
+            cat_x.append(c)
+
+    # 去掉只含一个值的列
+    numeric_x = [c for c in numeric_x if df[c].nunique() > 1]
+    cat_x = [c for c in cat_x if df[c].nunique() > 1]
+
+    # 填充缺失值
+    df[numeric_x] = df[numeric_x].fillna(0)
+    for c in cat_x:
+        df[c] = df[c].fillna('missing')
+    
+    # 自动处理列名是否合法
+    def make_safe_col(col):
+        if re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', col):
+            return col
+        else:
+            return f'`{col}`'
+
+    # 生成 formula
+    formula = y_var + ' ~ ' + ' + '.join(numeric_x + [f'C({make_safe_col(v)})' for v in cat_x])
+    print(f"FORMULA {formula}")
+    # 生成矩阵
+    y, X = dmatrices(formula, data=df, return_type='dataframe')
+
+    # 计算 VIF
+    vif_df = pd.DataFrame()
+    vif_df['Variables'] = X.columns
+    vif_df['VIF'] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
+
+    display(vif_df)
+    return vif_df
 
 
 # def compute_booking_rate(row):

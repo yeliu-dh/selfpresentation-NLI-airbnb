@@ -1,4 +1,5 @@
-        
+## vif + model+ plot + latex
+
         
         
         
