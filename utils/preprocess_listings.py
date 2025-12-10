@@ -8,292 +8,8 @@ import numpy as np
 import time
 
 
-##==================================UNZIP============================================##
-def unzip_csv_gz(folder='raw_data', output_folder='data'):
-    os.makedirs(output_folder, exist_ok=True)
-
-    for i, filename in enumerate(os.listdir(folder)):
-        file_path = os.path.join(folder, filename)
-
-        # 只处理 .gz 文件
-        if not filename.endswith('.gz'):
-            print(f"{i} {filename} is not a gzip file, skipped.\n")
-            continue
-
-        filename_clean = os.path.splitext(filename)[0]  # 去掉 .gz
-        file_outpath = os.path.join(output_folder, filename_clean)
-
-        # 如果输出文件已存在，跳过
-        if os.path.exists(file_outpath):
-            print(f"{i} {filename_clean} already exists in {output_folder}!\n")
-            continue
-
-        try:
-            df = pd.read_csv(file_path, compression='gzip', encoding='utf-8')
-            df.to_csv(file_outpath, index=False)
-            print(f"{i} ✔ {filename_clean} converted and saved in {output_folder}!\n")
-        
-        except Exception as e:
-            print(f"{i} ❌ Error converting {filename}: {e}\n")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-##==================================SPLIT============================================##
-
-
-def split_change_stable(df6, df9, year='2025'):
-    start_time=time.time()
-    print("===================================INPUT DATA===================================")
-
-    print("len df MARS:",len(df6))
-    print("len df JUIN:",len(df9))
-    
-    #合并数据集：
-    df6['scraped_date'] = f"{year}Q1"
-    df9['scraped_date'] = f"{year}Q2"
-    dfparis = pd.concat([df6, df9], ignore_index=True)
-    dfparis['host_since']=pd.to_datetime(dfparis['host_since'], errors="coerce")
-    print(f"len df total : {len(dfparis)} \n")
-
-    #增加status列：
-    # 仍然要统计每一个季度的listings数量，来识别新进入和流出房东
-    hosts6 = df6.groupby('host_id').size().reset_index(name='Q1')
-    hosts9 = df9.groupby('host_id').size().reset_index(name='Q2')
-    merged = hosts6.merge(hosts9, on='host_id', how='outer')
-    
-
-    # 分类:新房东，消失房东，listings增加/减少/不变
-    merged['status'] = merged.apply(
-        lambda r:
-            'reactive_host' if pd.isna(r['Q1']) else
-            'deactived_host' if pd.isna(r['Q2']) else
-            "old_host",
-            # ('expanded' if r['Q2'] > r['Q1'] else
-            # 'reduced' if r['Q2'] < r['Q1'] else
-            # 'no_change'),
-        axis=1
-    )
-
-    # print(f"HOST STATUTS: {merged.status.value_counts()}\n")
-    dfparis=dfparis.merge(merged[['host_id','status']], left_on='host_id', right_on='host_id',how='left')
-
-    # 根据host_since 细分new和reactive：纯向量操作（快十几倍，不需要 apply），同下效果。
-    mask = (
-        (dfparis['status'] == 'reactive_host') &
-        (dfparis['host_since'].between('2024-01-01', '2024-06-30'))
-    )
-    dfparis.loc[mask, 'status'] = 'new_host'
-    
-    # start_date, end_date = pd.to_datetime('2025-04-01'), pd.to_datetime('2025-06-30')
-    # dfparis['status'] = dfparis.apply(
-    #     lambda r: (
-    #         "new_host"
-    #         if (r['status'] == "reactive_host")
-    #         and (pd.notna(r['host_since']))
-    #         and (start_date <= r['host_since'] <= end_date)
-    #         else r['status']
-    #     ),
-    #     axis=1
-    # )
-
-    # 统计房东状态，但只看Q2避免，Q1Q2重复记录
-    print("===================================APRCU GLOBAL===================================")
-    print("※ HOST STAUTS CHANGE (Q2): \n", dfparis[dfparis['scraped_date']==f'{year}Q2']['status'].value_counts(dropna=False),"\n")
-
-
-    #描述房源数量变化
-    print("LISTINGS CHANGE:")
-    hosts_in = set(df9['id']) - set(df6['id']) # 9月有，但6月没有
-    hosts_out = set(df6['id']) - set(df9['id']) #6月有，但9月没有
-    hosts_io= set(df9['id']) ^ set(df6['id']) # 属于 6月 或 9月，但不同时属于两者;所有变化的房东（新增 + 消失）
-    print(f'new listings after JO : {len(hosts_in)}({len(hosts_in)*100/len(df9):.2f}%)')
-    print(f'listings dispeared after JO : {len(hosts_out)}({len(hosts_out)*100/len(df9):.2f}%)')
-    print(f"listings changed during JO :{len(hosts_io)}\n")
-
-
-
-    #================增加host_about_q2, host_about_change列=========================
-    if 'host_about_q1' not in dfparis:
-        df_q1 = dfparis[dfparis['scraped_date'] == f"{year}Q1"][['host_id', 'id', 'host_about']]
-        df_q1 = df_q1.rename(columns={'host_about': 'host_about_q1'})
-        dfparis = dfparis.merge(df_q1, on=['host_id', 'id'], how='left')
-        # print(f"q1 : {dfparis.host_about_q1.notna().value_counts()}")
-
-    # 计算文本相似度（使用 difflib.SequenceMatcher）
-    from difflib import SequenceMatcher
-    def text_similarity(a, b):
-        if pd.isna(a) or pd.isna(b):
-            return None
-        return SequenceMatcher(None, str(a), str(b)).ratio()
-
-    # 标记 Q2 相对于 Q1 的变化
-    def host_about_change(row, threshold=0.85):
-        """
-        没改动/例外都被填为nan （包括所有Q1房东）
-        
-        新房东/新文本/新bio填1或sim
-        """
-
-        #虽然计算sim，但是所有标记成：变化1，不变0。仅用于筛选
-
-        if row['scraped_date'] != f"{year}Q2":
-            return 0  # 只对 Q2 标记，Q1均为0
-        if pd.isna(row['host_about_q1']) and pd.notna(row['host_about']):
-            return 1  # 新增文本; （新房东或之前未填写文本的房东）
-        if pd.notna(row['host_about_q1']) and pd.notna(row['host_about']):#老房东&bio不为空# row['host_about'] != row['host_about_q2']:
-            sim= text_similarity(row['host_about_q1'], row['host_about']) 
-            if sim < threshold:## 老文本有明显变化
-                return 1 
-            else:
-                return 0 #无明显改变是就填NAN
-        return 0 # 未变&其他情况
-
-    if "host_about_changed" not in dfparis:
-        dfparis['host_about_changed'] = dfparis.apply(host_about_change, axis=1)
-
-    # 查看 Q2 中变化统计：没改动都被填为nan，新房东/新文本/新bio填1或sim:
-    print("HOST ABOUT CHANGE (change:1, no_change:0) :")
-    # print(dfparis.host_about_changed.notna().value_counts())#没有nan，例外也填0
-    print(dfparis.host_about_changed.value_counts(),"\n")
-
-
-    #================增加host_picture_url_q1, host_picture_url_change列=========================
-    if "host_picture_url_q1" not in dfparis:
-        df_q1 = dfparis[dfparis['scraped_date'] == f"{year}Q1"][['host_id', 'id', 'host_picture_url']]
-        df_q1 = df_q1.rename(columns={'host_picture_url': 'host_picture_url_q1'})
-        dfparis = dfparis.merge(df_q1, on=['host_id', 'id'], how='left')
-
-    # 标记 Q2 相对于 Q1 的变化
-    def host_picture_url_change(row):
-        if row['scraped_date'] !=f"{year}Q2":
-            return 0 # 只对 Q2 标记, Q1均为0
-        if pd.isna(row['host_picture_url_q1']) and pd.notna(row['host_picture_url']):
-            return 1  # 新增照片
-        if pd.notna(row['host_picture_url_q1']) and pd.notna(row['host_picture_url']) and row['host_picture_url'] != row['host_picture_url_q1']:
-            return 1  # 修改照片
-        return 0 # 没变&其他情况
-
-    if "host_picture_url_changed" not in dfparis:
-        dfparis['host_picture_url_changed'] = dfparis.apply(host_picture_url_change, axis=1)
-
-    # 查看 Q2 变化统计
-    print("HOST PICTURE CHANGE (change:1, no_change:0):")
-    print(dfparis.host_picture_url_changed.notna().value_counts())
-    print(dfparis.host_picture_url_changed.value_counts(),"\n")
-
-
-    #====================SPLIT=====================
-    #筛选出Q2所有变化的房东：!!!!!!!!!
-    dfparisQ2=dfparis[dfparis['scraped_date'] == f"{year}Q2"]
-    def presentation_change_level(row):
-        # 数值计算更加简单、可靠!
-        bio_change = 1 if row.get('host_about_changed') ==1 else 0
-        pic_change = 1 if row.get('host_picture_url_changed') == 1 else 0
-        return bio_change+pic_change  #记录为数组 或加减数值 0,1,2 分别代表不同程度变化
-
-    #在整个数据上应用：
-    dfparisQ2['presentation_change'] = dfparisQ2.apply(presentation_change_level, axis=1)
-    print(f"HOST IM global (no_change:0, 1change :1, 2change:2): \n {dfparisQ2.presentation_change.value_counts()} \n")
-    # print(f"HOST IM CHANGE :\n {dfparisQ2[['host_about_changed','host_picture_url_changed']].value_counts(dropna=False)}\n")
-
-
-    # split
-    # 统计new_host| reactive_host | host_about_change| host_pic_change的行：
-    dfparisQ2['is_changed'] = (
-        (dfparisQ2['status'].isin(['new_host', 'reactive_host'])) |
-        (dfparisQ2['presentation_change'] > 0)
-    )    #返回T/F
-    df_change = dfparisQ2[dfparisQ2['is_changed']]
-    df_stable = dfparisQ2[~dfparisQ2['is_changed']]
-
-    # df_change = dfparisQ2[
-    #     (dfparisQ2['status'].isin(['new_host', 'reactive_host'])) |
-    #     dfparisQ2['presentation_change']> 0 #改变bio/pic
-    # ]
-    # df_stable = dfparisQ2[~dfparisQ2['host_id'].isin(df_change['host_id'])]#.isin() 来做“是否在某个列表中”的列级比较，然后加 ~ 表示取反。
-    # 按照host_id筛选有风险，会排除掉一个房东的多个房源，只取第一个
-
-
-    print("===================================SUMMARY ON CHANGE===================================")
-    print("CHANGE == new_host| reactive_host | host_about_change| host_pic_change")
-    print(f"※ len change: {len(df_change)} | len new_host: {len(df_change[df_change['status']=='new_host'])}\n"
-          f"※ len stable: {len(df_stable)} \n"
-          )
-    
-    
-
-    #房东市场行为变化统计：
-    print("※ HOST STATUS CHANGE dans df_change:")
-    print(df_change.status.value_counts()/len(df_change),'\n')
-    # print(df_stable.status.value_counts()/len(df_stable),"\n")#tjs old_host
-
-    #房东自我展示变化统计：
-    print("※ HOST IM CHANGE dans df_change:")
-    print(df_change .presentation_change.value_counts()/len(df_change),'\n')
-    print(f"※ DETAILS :\n {df_change[['host_about_changed','host_picture_url_changed']].value_counts(dropna=False)}\n")
-
-    # print(df_stable.presentation_change.value_counts()/len(df_stable),"\n")# tjs0
-
-
-
-    # ================END====================
-    end_time=time.time()
-    print(f"✅ Temps d'exécution :{end_time-start_time:.2f} sec.")
-    return dfparisQ2, df_change, df_stable
-
-
-
-
-
-def save_global_change_stable_csv(csv_files, year:str, location:str, output_folder="data_jo_processed"):
-    
-    print("NB. csv files enter strictly in order : global-change-stable!")
-    print(f"default output folder : {output_folder}")
-
-    os.makedirs(output_folder, exist_ok=True)
-
-    for i, f in enumerate(csv_files):
-        if i==0 :
-            output_path=f"{output_folder}\listings_jo_{location}{year}.csv"
-        elif i==1:
-            output_path=f"{output_folder}\listings_jo_{location}{year}_change.csv"
-        elif i==2:
-            output_path=f"{output_folder}\listings_jo_{location}{year}_stable.csv"
-        f.to_csv(output_path, index=False)
-        print(f"✔ csv saved in {output_path}!")
-
-    return 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ##=============================DESC STAT=====================================##
-
-
 
 def print_nan_ratio(df, col):
     ratio = (df[col].value_counts(dropna=False) / len(df)).round(2)
@@ -307,7 +23,10 @@ def print_zero_ratio(df, col):
 
 def desc_catORnum(df, vars):
 
-    print("================= BALN PROCESSED VARIABLES =====================")
+    print("\n================= BALN PROCESSED VARIABLES =====================\n"
+        f"[INFO] statictic description on df ({len(df)} lines):\n"
+        f"{' ; '.join(vars)}\n")
+    
     
     for var in vars:
         if not var in df:
@@ -365,6 +84,8 @@ def detect_language_langid(text):
 
     except Exception:
         return "unk"  # 检测失败的情况
+
+
 
 
 
@@ -503,7 +224,7 @@ def preprocess_host_variables(df_raw):
     df=df.drop(columns=['days_since_host'])#?
     print(f"Intermediate cols deleted: days_since_host")
     end_time=time.time()
-    print(f"\n[SUCCES] Process host variables : {end_time-start_time:.2f} sec!\n")
+    print(f"\n✅[SUCCES] Process host variables : {end_time-start_time:.2f} sec!\n")
     
 
     return df
@@ -521,12 +242,24 @@ def preprocess_host_variables(df_raw):
 
 ##==================================PROXY============================================##
 
+def filter_df(df, vars):
+    df_filtered=df.copy()
+        
+    for var in vars :
+        len_before=len(df_filtered)
+        df_filtered=df_filtered[df_filtered[var].notna()]
+        len_after=len(df_filtered)
+        print(f"[INFO]{len_before-len_after} nan dropped in {var}")
 
-def filter_by_proxy(df,proxy_vars=['price',"availability_90"], get_boooking_rate_l30d=True):
-    print(
-        f"\n\n==============================PROXY=============================\n")
+    print(f"\nlen BEFORE filtrage by {'; '.join(vars)}: {len(df)}\n"
+        f"len AFTER: {len(df_filtered)}\n")
+   
+    return df_filtered
 
-    
+
+
+def check_proxy_vars(df,proxy_vars=['price',"availability_90"], get_boooking_rate_l30d=True):
+   
     for var in proxy_vars:
         # price
         if var == 'price' and var in df.columns :
@@ -535,8 +268,7 @@ def filter_by_proxy(df,proxy_vars=['price',"availability_90"], get_boooking_rate
                 df['price']
                 .replace('[\$,]', '', regex=True)  # 去掉 $ 和 ,
                 .astype(float)                     # 转成数值
-            )
-            
+            )            
             
     if get_boooking_rate_l30d==True:
         print(
@@ -548,24 +280,15 @@ def filter_by_proxy(df,proxy_vars=['price',"availability_90"], get_boooking_rate
             if row['availability_30'] > 0 else None,
             axis=1
         )
-            
+        proxy_vars.extend(["number_of_reviews_l30d","availability_30","booking_rate_l30d"])
+        print(f"[INFO] proxy vars :{'; '.join(proxy_vars)}\n")
         
     # filtrer :
     # init df_filtered:
-    df_filtred=df.copy()
     # if get_boooking_rate_l30d==True:
     #     proxy_vars.append('booking_rate_l30d')
-        
-    for var in proxy_vars :
-        len_before=len(df_filtred)
-        df_filtred=df_filtred[df_filtred[var].notna()]
-        len_after=len(df_filtred)
-        print(f"[INFO]{len_before-len_after} nan dropped in {var}")
 
-    print(f"\nlen BEFORE filtrage by {'; '.join(proxy_vars)}: {len(df)}\n"
-        f"len AFTER: {len(df_filtred)}\n")
-   
-    return df, df_filtred
+    return df, proxy_vars
 
 
 
@@ -573,8 +296,7 @@ def filter_by_proxy(df,proxy_vars=['price',"availability_90"], get_boooking_rate
 
 ##==================================LOCATION============================================##
 
-def add_is_within_km(df, threshold_km=3):
-    
+def add_is_within_km(df, threshold_km):
     venues_df = pd.DataFrame([
         {"venue": "Stade de France", "lat": 48.9244, "lon": 2.3601},
         {"venue": "Paris Aquatic Centre", "lat": 48.9235, "lon": 2.3554},   # 根据维基坐标 :contentReference[oaicite:1]{index=1}
@@ -588,11 +310,11 @@ def add_is_within_km(df, threshold_km=3):
         # …你可以继续补充其他场馆
     ])
 
-    print(f"\n\n ==============================LOCATION=============================\n"
+    # print(f"\n\n ==============================LOCATION=============================\n"
             # f"CALCULATION METHODS :\n"
             # f"-'latitude','longitude': \n 计算房源到各大主要venue的距离，果最小值<=5km, 则在is_within_5km上填't',反之'f'"
             # f"venues_df :\n {venues_df}\n"
-            )
+            # )
     
     # 确保坐标数值化
     df['latitude'] = pd.to_numeric(df['latitude'], errors='coerce')
@@ -637,17 +359,17 @@ def add_is_within_km(df, threshold_km=3):
 # 描述！
 
 def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_90"], 
-                        get_boooking_rate_l30d=True, filtrate_by_booking_rate=True, 
+                        get_boooking_rate_l30d=False, filtrate_by_booking_rate=False,#无输入时默认不按照booking筛选 
                         obj_vars=["room_type", "minimum_nights","instant_bookable"], 
-                        threshold_km=None):
+                        threshold_km:int=None, 
+                        output_folder="mod_results", filename=None):
     # obj_vars=["room_type", "minimum_nights","instant_bookable"]#all ok,无缺失/异常
     # proxy_vars=['price',"availability_90"]
     
-    print(f"\n\n**********************************PROXY + OBJ VARS**********************************\n"
+    print(f"\n\n==========================PROXY + OBJ VARS==========================\n"
         f"PROCESS PIPELINE :\n"
         f"1) process proxies : \n"
-        f" clean + dropna  : {', '.join(proxy_vars)} \n"
-        f" ==> get df_filtered \n\n"
+        f"- price : delete '$', to_numeric\n"
         
         f" 2) if get_boooking_rate_l30d==True, calculation method:\n"
         f"- booking_rate_l30d = number_of_reviews_l30d / availability_30 \n"
@@ -655,49 +377,67 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
         f" if availability_30 = 0, take NaN.\n"
         f" if booking_rate_l30d > 1, take 1.\n\n"
         
-        f"2) desc statistique :{', '.join(obj_vars)} \n\n"
+        f"3) obj vars :\n "
+        f"- instant_bookable : fillna('f')\n"
+        f"- minimum_nights : only allows int, else NaN, fillna(0), all values tranformed numeric"
         
-        f"3) if enter 'threshold_km':\n"
+        
+        f"3) filter : dropna on vars ==> get df_filtered \n\n"
+        "desc statistique :{', '.join(obj_vars)} \n\n"
+        
+        f"4) if enter 'threshold_km':\n"
         f"location :'latitude','longitude': ADD 'is_within_Xkm'\n"
         f"calculate  distance bewtween listing and its cloest venue. if it's under {threshold_km} km, 'is_within_{threshold_km} km' ==1, else 0.\n"
         )
-    all_vars=[]
+    vars_to_dropna=[]    
+     
+    print("# ---------------------------proxy-----------------------")
     
-                
-    # proxy
-    df, df_filtered=filter_by_proxy(df, proxy_vars=proxy_vars, get_boooking_rate_l30d=get_boooking_rate_l30d)
-    all_vars.extend(proxy_vars)
+    df, proxy_vars=check_proxy_vars(df, proxy_vars=proxy_vars, get_boooking_rate_l30d=get_boooking_rate_l30d)
+    vars_to_dropna.extend(proxy_vars)
     
+    # all_vars.extend(proxy_vars)    
+    # ## 单独写？
+    # if get_boooking_rate_l30d==True and filtrate_by_booking_rate==True:
+    #     print(f"len BEFORE filtrage of nan (availability==0) by 'booking_rate_l30d': {len(df_filtered)}")
+    #     df_filtered=df_filtered[df_filtered['booking_rate_l30d'].notna()]
+    #     print(f"len AFTER: {len(df_filtered)}\n")           
     
-    ## 单独写？
-    if get_boooking_rate_l30d==True and filtrate_by_booking_rate==True:
-        print(f"len BEFORE filtrage of nan (availability==0) by 'booking_rate_l30d': {len(df_filtered)}")
-        df_filtered=df_filtered[df_filtered['booking_rate_l30d'].notna()]
-        print(f"len AFTER: {len(df_filtered)}\n")           
+    # if get_boooking_rate_l30d==True:
+    #     all_vars.extend(['number_of_reviews_l30d',"booking_rate_l30d"])#?
     
-    if get_boooking_rate_l30d==True:
-        all_vars.extend(['number_of_reviews_l30d',"booking_rate_l30d"])#?
-    
-    # obj vars :
+    print("#---------------------- obj vars ------------------------")
     if "instant_bookable" in obj_vars:
         df["instant_bookable"]=df["instant_bookable"].fillna("f")
-   
-    all_vars.extend(obj_vars)
+        
+    if "minimum_nights" in obj_vars:# 又不是数字的值: 2023-12-12
+        df["minimum_nights"]=df["minimum_nights"].apply(lambda x : x if isinstance(x, float) else None)
+        df["minimum_nights"]=df["minimum_nights"].fillna(0)
+        df["minimum_nights"]=pd.to_numeric(df['minimum_nights'], errors='coerce')#强制变成数值
+        
+    vars_to_dropna.extend(obj_vars)
     
-    # location:
+    print('# -----------------------location----------------------')
     if threshold_km!=None:    
-        df_filtered=add_is_within_km(df_filtered,threshold_km=3)
-        all_vars.append(f'is_within_{threshold_km}km')
+        df=add_is_within_km(df,threshold_km=3)
+        vars_to_dropna.extend(f'is_within_{threshold_km}km')
         
-       
-    print(f"[INFO] statictic description on df_filtrered ({len(df_filtered)} lines):\n"
-          f"{' ; '.join(all_vars)}\n")
+    print("# --------------------filter & desc----------------------")
+    df_filtered=filter_df(df,vars=vars_to_dropna)
+    desc_catORnum(df=df_filtered, vars=vars_to_dropna) 
     
-    desc_catORnum(df_filtered, vars=all_vars) 
-
-
-        
+    # save
+    os.makedirs(output_folder, exist_ok=True)
+    if filename is None:#不指定名字则用默认名字listings_filtered
+        filename="listings_filtered.csv"
+    outpath_df_filtered=os.path.join(output_folder, filename)
+    df_filtered.to_csv(outpath_df_filtered, index=False)
+    print(f"\n✅[SAVE] {len(df_filtered)} lines df_filtered saved to {outpath_df_filtered}!")
+    
     return df_filtered
+
+
+
 
 
 
@@ -716,6 +456,9 @@ def save_csv_as_latex(table_csv, output_path,caption, label):
     return 
 
 
+
+
+## =================================profil comparaison=======================================##
 
 def group_mean_table(df, cols, group_col='host_is_superhost'):
     """
@@ -739,19 +482,28 @@ def group_mean_table(df, cols, group_col='host_is_superhost'):
 
 
 
-def group_mean_table_ttest(df, cols, group_col='host_is_superhost', output_folder="mod_results"):
+def group_mean_table_ttest(df, cols, group_col='host_is_superhost', output_folder="desc_results"):
 
     """
     返回均值表 + t-test p-value列
     """
     from scipy.stats import ttest_ind
+    
+    print(f"[INFO] ttest on {len(df)} lines.\n"
+          f"group by : {df[group_col].value_counts(dropna=False)}\n")
+    
+    # filter valid cols:
+    cols_valid=[col for col in cols if col in df.columns]
+    cols_missing=[col for col in cols if col not in cols_valid]
 
+    print(f"[WARNING]{len(cols_missing)} missing cols in df_input :\n {'; '.join(cols_missing)}\n")
+    
     # 或者只筛选非数值列
-    non_numeric_cols = [c for c in cols if not pd.api.types.is_numeric_dtype(df[c])]
+    non_numeric_cols = [c for c in cols_valid if not pd.api.types.is_numeric_dtype(df[c])]
     if len(non_numeric_cols)>0:
         print(f"[WARNING] non_numeric_cols:\n {'; '.join(non_numeric_cols)}\n")
     
-    numeric_cols=[c for c in cols if c not in non_numeric_cols]
+    numeric_cols=[c for c in cols_valid if c not in non_numeric_cols]
     print(f"Table of Superhost and others in {len(numeric_cols)} dimensions:\n")
     
     
@@ -780,7 +532,11 @@ def group_mean_table_ttest(df, cols, group_col='host_is_superhost', output_folde
             sig = ''
         result.loc[col, 'significance'] = sig
     # result=result.sort_values(by="ttest_p", ascending=True)
+    
+    
+    
     # save csv and latex:
+    os.makedirs(output_folder, exist_ok=True)
     outpath_latex=os.path.join(output_folder, 'table_host_latex.tex')
     
     outpath_csv=os.path.join(output_folder, 'table_host.csv')    
@@ -792,90 +548,10 @@ def group_mean_table_ttest(df, cols, group_col='host_is_superhost', output_folde
                       caption="Tableau du profil des Superhôtes et des Autres",
                       label="tab:table_host")
 
-
-     
     
     return result
 
 
-# def check_vif (df,x_vars, y_var):
-#     from statsmodels.stats.outliers_influence import variance_inflation_factor
-#     from patsy import dmatrices    
-#     # 确保因变量不在自变量里
-#     if y_var in x_vars:
-#         x_vars.remove(y_var)
-    
-#     # # 把数值型和类别型分开：
-#     # for var in x_vars :
-#     #     if len(df[df[var].isna()])!=0:#不够稳健,检查不出空字符串和"nan"?
-#     #         print(f'[warning] {var} has nan!!')
-#     for var in x_vars:
-#         s = df[var]
-#         missing = s.isna() | (s.astype(str).str.strip() == '') | (s.astype(str).str.lower() == 'nan')
-#         # 同时检测：NaN, 空字符串, 'nan' 字符串
-#         if missing.any():
-#             print(f'[warning] {var} has {missing.sum()} missing values!')
-
-#     # non_numeric_x = [c for c in x_vars if not pd.api.types.is_numeric_dtype(df[c])]
-#     # numeric_x=[c for c in x_vars if c not in non_numeric_x]
-
-#     # print(f"[INFO] non_numeric_cols :{'; '.join(non_numeric_x)}\n"
-#     #         f"[INFO] numeric_cols :{'; '.join(numeric_x)}\n")
-
-#     # formula = y_var + ' ~ ' + ' + '.join(numeric_x + [f'C({v})' for v in non_numeric_x])
-    
-#     # y, X = dmatrices(formula, data=df, return_type='dataframe')
-    
-#     # # 计算 VIF
-#     # vif_df = pd.DataFrame()
-#     # vif_df['Variables'] = X.columns
-#     # vif_df['VIF'] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
-#     # display(vif_df)
-    
-#     # return vif_df     
-def check_vif(df, x_vars, y_var):
-    from statsmodels.stats.outliers_influence import variance_inflation_factor
-    from patsy import dmatrices
-    import pandas as pd
-
-    df = df.copy()
-
-    if y_var in x_vars:
-        x_vars.remove(y_var)
-
-    # 检查缺失值（更稳健）
-    for var in x_vars:
-        s = df[var]
-        missing = s.isna() | (s.astype(str).str.strip() == '') | (s.astype(str).str.lower() == 'nan')
-        if missing.any():
-            print(f'[warning] {var} has {missing.sum()} missing values!')
-
-    # 分类/数值区分
-    numeric_x = [c for c in x_vars if pd.api.types.is_numeric_dtype(df[c])]
-    non_numeric_x = [c for c in x_vars if c not in numeric_x]
-
-    print(f"[INFO] numeric_cols : {numeric_x}")
-    print(f"[INFO] non_numeric_cols : {non_numeric_x}")
-
-    # 填充缺失值
-    df[numeric_x] = df[numeric_x].fillna(0)
-    for c in non_numeric_x:
-        df[c] = df[c].fillna('missing')
-
-    # 公式
-    # formula = y_var + ' ~ ' + ' + '.join(numeric_x + [f'C({v})' for v in non_numeric_x])
-    formula = y_var + ' ~ ' + ' + '.join(numeric_x + [f'C({v})' for v in non_numeric_x])
-
-    # dmatrices
-    y, X = dmatrices(formula, data=df, return_type='dataframe')
-
-    # VIF
-    vif_df = pd.DataFrame()
-    vif_df['Variables'] = X.columns
-    vif_df['VIF'] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
-
-    display(vif_df)
-    return vif_df
 
 
 
@@ -886,58 +562,12 @@ def check_vif(df, x_vars, y_var):
 
 
 
-from patsy import dmatrices
-from statsmodels.stats.outliers_influence import variance_inflation_factor
-import pandas as pd
-import re
-from patsy import dmatrices
-from statsmodels.stats.outliers_influence import variance_inflation_factor
-import pandas as pd
 
-def check_vif_safe(df_input, x_vars, y_var):
-    import re
-    df = df_input.copy()
 
-    if y_var in x_vars:
-        x_vars = [v for v in x_vars if v != y_var]
 
-    numeric_x = []
-    cat_x = []
-    for c in x_vars:
-        if pd.api.types.is_numeric_dtype(df[c]):
-            numeric_x.append(c)
-        else:
-            cat_x.append(c)
 
-    # 去掉只含一个值的列
-    numeric_x = [c for c in numeric_x if df[c].nunique() > 1]
-    cat_x = [c for c in cat_x if df[c].nunique() > 1]
 
-    # 填充缺失值
-    df[numeric_x] = df[numeric_x].fillna(0)
-    for c in cat_x:
-        df[c] = df[c].fillna('missing')
-    
-    # 自动处理列名是否合法
-    def make_safe_col(col):
-        if re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', col):
-            return col
-        else:
-            return f'`{col}`'
 
-    # 生成 formula
-    formula = y_var + ' ~ ' + ' + '.join(numeric_x + [f'C({make_safe_col(v)})' for v in cat_x])
-    print(f"FORMULA {formula}")
-    # 生成矩阵
-    y, X = dmatrices(formula, data=df, return_type='dataframe')
-
-    # 计算 VIF
-    vif_df = pd.DataFrame()
-    vif_df['Variables'] = X.columns
-    vif_df['VIF'] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
-
-    display(vif_df)
-    return vif_df
 
 
 # def compute_booking_rate(row):
