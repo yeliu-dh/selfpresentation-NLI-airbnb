@@ -24,9 +24,10 @@ from utils.preprocess_listings import save_csv_as_latex
 def run_check_fa(df, labels,output_folder="fa_results", 
                 n_factors=5, rotation="oblimin", 
                 fa_names=None,
+                get_items_heatmap=True,
                 get_factor_scores_by='both',
                 run_scores_fa_on="mean",
-                get_data_heatmap=True, get_cronbachs_a=True,
+                get_cronbachs_a=True,
                 get_barplot=False, get_pca3d=False, 
                 get_table=True,low_comm_t=0.5):
     
@@ -34,7 +35,7 @@ def run_check_fa(df, labels,output_folder="fa_results",
     # 英语提示，但是图片标题用法语！
     #output
     os.makedirs(output_folder, exist_ok=True)
-    print(f"[INFO] all results saved to folder {output_folder}!\n"
+    print(f"[INFO] all results saved to folder '{output_folder}'!\n"
           f"INITIALISE df, or MERGE go WRONG!!!")
 
     ###============================RUN==============================###
@@ -53,6 +54,7 @@ def run_check_fa(df, labels,output_folder="fa_results",
     kmo_all, kmo_model = calculate_kmo(data)
     print(f"[INFO] kmo_model score (> 0.7) :{kmo_model}\n")
 
+
     # ---------------------------fa fit -------------------------------
     if rotation =="oblimin":
         print(f"[INFO] oblimin allows cross-loadings!\n")
@@ -60,8 +62,9 @@ def run_check_fa(df, labels,output_folder="fa_results",
     fa.fit(data)
     ### output impo :fa, data
 
-    print("---------------------------heatmap of zsc-------------------------------")
-    if get_data_heatmap==True: 
+
+    print("---------------------------heatmap of items-------------------------------")
+    if get_items_heatmap==True: 
         loadings = fa.loadings_
         print(f"[INFO] good loadings > 0.5")
         
@@ -80,7 +83,8 @@ def run_check_fa(df, labels,output_folder="fa_results",
         plt.show()
         print(f"[SAVE] heatmap saved to {outpath_heatmap}!\n")
 
-    print("---------------------------------fa scores ---------------------------------")
+
+    print("-------------------------------get fa scores(tactics)---------------------------------")
     # 从原始 df 中筛选非空行 (df_dropna) 做 FA
     # 得到 FA scores (df_scores) (无id索引)！
     # 拼接回 df_dropna → 得到 df_tactics
@@ -90,10 +94,12 @@ def run_check_fa(df, labels,output_folder="fa_results",
     # init，空的df不会拼接上
     df_scores_mean=pd.DataFrame()
     df_scores_weighted=pd.DataFrame()
+    desired_order_tactics=['ouverture','authenticité','sociabilité',"auto_promotion","exemplarité"]   
+    # reorder for heatmap!
     
     if get_factor_scores_by  in ["mean","both"]:
         print(f"[INFO] calulate factor score by taking the average of its corresponding items, ref to a pre-defined map.\n")
-        fa_item_map={
+        tac_item_map={
             "ouverture":['open to different cultures','cosmopolitan','international view','cultural exchange'],
             "authenticité":['personal life','life experiences','divers interests','hobbies','enjoy life'],
             'sociabilité':['meet new people', 'welcoming', 'friendly','sociable', 'interpersonal interaction'],
@@ -101,16 +107,25 @@ def run_check_fa(df, labels,output_folder="fa_results",
             'exemplarité':["fan of Airbnb","Airbnb community",'love Airbnb', 'travel with Airbnb']
         }
         fa_scores_mean = pd.DataFrame(index=data.index)
-        for f, items in fa_item_map.items():
+        for f, items in tac_item_map.items():
             fa_scores_mean[f'{f}_mean'] = data[items].mean(axis=1)
         df_scores_mean=pd.DataFrame(fa_scores_mean).reset_index(drop=True)
+        
+        mean_order=[f"{tac}_mean" for tac in desired_order_tactics]
+        print(f"MEAN ORDER:{mean_order}")
+        df_scores_mean=df_scores_mean[mean_order]
 
     if get_factor_scores_by in ["transform","both"]:
-        fa_scores_weighted = fa.transform(data)
+        fa_scores_weighted = fa.transform(data)#用和items fa相同的fa transforme data就可以得到加权的scores==tactics!
         df_scores_weighted=pd.DataFrame(fa_scores_weighted).reset_index(drop=True)
         if fa_names:
             df_scores_weighted.columns=[f"{col}_weighted" for col in fa_names]
-    
+            #reorder:
+            weighted_order=[f"{tac}_weighted" for tac in desired_order_tactics]
+            print(f"WEIGHTED ORDER:{weighted_order}")
+
+            df_scores_weighted=df_scores_weighted[weighted_order]
+
     if get_factor_scores_by not in ['mean','transform', 'both']:
         print(f"[WARNING] choose from 'mean' or 'transform'!!")
 
@@ -118,35 +133,38 @@ def run_check_fa(df, labels,output_folder="fa_results",
 
 
 
-    print("------------------------heatmap of fa scores(tactcis)----------------------------")
-    # init fa
-    fa_scores = FactorAnalyzer(n_factors=2, rotation='oblimin', method='minres')
+    print("------------------------heatmap of tactics (fa scores)----------------------------")
     
-    get_heatmap_scores=False
-    if run_scores_fa_on=='mean' and not df_scores_mean.empty:        
-        fa_scores.fit(df_scores_mean)
-        df_scores_hm=df_scores_mean
-        get_heatmap_scores=True
-    
-    elif run_scores_fa_on=='weighted' and not df_scores_weighted.empty:
-        fa_scores.fit(df_scores_weighted)
-        df_scores_hm=df_scores_weighted
-
-        get_heatmap_scores=True
-    else :
-        get_heatmap_scores=False
+    # plot
+    def heatmap_tactics(df_scores, run_scores_fa_on, output_folder):
+        # init fa & fit 
+        fa_scores = FactorAnalyzer(n_factors=2, rotation='oblimin', method='minres') 
+        fa_scores.fit(df_scores)
         
-    if get_heatmap_scores==True:
+        #data
         loadings_scores = fa_scores.loadings_
-        loadings_scores_df=pd.DataFrame(loadings_scores, index=df_scores_hm.columns)
+        loadings_scores_df=pd.DataFrame(loadings_scores, index=df_scores.columns)
+        
+        #plot
         sns.heatmap(loadings_scores_df, annot=True, cmap='coolwarm')
         plt.title(f'Charge factorielles des tactiques (scores {run_scores_fa_on})')
         plt.tight_layout()
+        #
         scores_mean_heatmap_outpath=os.path.join(output_folder,f'heatmap_fa_scores_{run_scores_fa_on}.jpg')
         plt.savefig(scores_mean_heatmap_outpath,dpi=300)
         plt.show()
         print(f"[SAVE] heatmap of mean scores saved to {scores_mean_heatmap_outpath}!\n")
 
+        return
+    
+    if run_scores_fa_on in ['mean', "both"] and not df_scores_mean.empty:   
+        heatmap_tactics(df_scores=df_scores_mean, run_scores_fa_on='mean', output_folder=output_folder)
+    
+    if run_scores_fa_on in ['weighted', "both"] and not df_scores_weighted.empty:
+        heatmap_tactics(df_scores=df_scores_weighted, run_scores_fa_on="weighted", output_folder=output_folder)
+    
+    if run_scores_fa_on not in ["mean",'weighted', "both"] :
+        print(f"[INFO] choisir between 'mean','weighted','both' to run fa on tactics' scores!\n")
 
 
     print("----------------------------merge data to listings---------------------------------")
