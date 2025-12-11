@@ -379,23 +379,18 @@ def categorize_property(ptype):
     if pd.isna(ptype) or str(ptype).strip() == "":
         return "others"
     ptype_lower = str(ptype).lower()
-
     # ENTIRE
     if any(word in ptype_lower for word in ["entire", "condo", "loft", "apartment"]):
         return "entire"
-
     # HOTEL
     elif "hotel" in ptype_lower:
         return "hotel"
-
     # SHARED
     elif any(word in ptype_lower for word in ["shared", "bed and breakfast", "boutique"]):
         return "shared"
-
     # PRIVATE
     elif "private" in ptype_lower:
         return "private"
-
     else:
         return "others"
 
@@ -457,6 +452,20 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
         df['minimum_nights'] = pd.to_numeric(df.minimum_nights, errors='coerce')#无法转换的会变成nan
         df["minimum_nights"]=df["minimum_nights"].fillna(0)
 
+    if "room_type" in obj_vars:
+        """
+        room_type
+        Entire home/apt    32396
+        Private room        3819
+        Hotel room           530
+        Shared room          268
+        2.1                    1
+        Name: count, dtype: int64        
+        """
+    
+        df['room_type']=df['room_type'].apply(lambda x : x if x in ['Entire home/apt',"Private room","Hotel room", "Shared room"] else None)           
+        
+        
     if "property_type" in obj_vars:
         df["property_type"] = df["property_type"].apply(categorize_property)
 
@@ -551,12 +560,13 @@ def group_mean_table_ttest(df, cols_to_check, group_col='host_is_superhost',
         print(f"[WARNING]{len(cols_missing)} missing cols in df_input :\n {'; '.join(cols_missing)}\n")
     
     # 或者只筛选非数值列
+    print(f"[INFO] ttest take ONLY numeric cols! \n")
     non_numeric_cols = [c for c in cols_valid if not pd.api.types.is_numeric_dtype(df[c])]
     if len(non_numeric_cols)>0:
-        print(f"[WARNING] ONLY take numeric cols:\n {'; '.join(non_numeric_cols)}\n")
+        print(f"[CHECK] no numeric cols:\n {'; '.join(non_numeric_cols)}\n")
     
     numeric_cols=[c for c in cols_valid if c not in non_numeric_cols]
-    print(f"Table of Superhost and others in {len(numeric_cols)} dimensions:\n")
+    print(f"Table of Superhost and others in {len(numeric_cols)} dimensions:\n {'; '.join(numeric_cols)}\n")
     
     
     ## init res df
@@ -600,12 +610,32 @@ def group_mean_table_ttest(df, cols_to_check, group_col='host_is_superhost',
     return result
 
 
-
+def plot_violon(df_input, vars, to_fillna0=False, output_folder="mod_results", filename=None):
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    
+    df=df_input.copy()
+    if to_fillna0==True:
+        df[vars]=df[vars].fillna(0)
+    
+    data=df[vars]   
+    plt.figure(figsize=(8,6))
+    sns.violinplot(data, palette='viridis')
+    plt.title("violinplot of scores")
+    plt.xticks(rotation=45)
+    if filename==None:
+        filename="violonplot.jpg"
+    outpath_violon=os.path.join(output_folder,filename)
+    plt.savefig(outpath_violon, dpi=300)
+    plt.tight_layout()
+    print(f"[SAVE] violon plot saved to {outpath_violon}!")
+        
+    return 
 
 
 
 def plot_distribution(df, group_col=None, y_var='booking_rate_l30d', 
-                                   output_folder="mod_results"):
+                                   output_folder="mod_results",filename=None):
     import matplotlib.pyplot as plt
     import seaborn as sns
 
@@ -621,7 +651,7 @@ def plot_distribution(df, group_col=None, y_var='booking_rate_l30d',
     if group_col:   
         for i, val in enumerate(["t", "f"]):
             group_data = df[df[group_col]==val][y_var].dropna()
-            label = "Superhosts" if val=="t" else "Autres"
+            label = "Superhôtes" if val=="t" else "Autres"
             title+="(Superhôtes vs Autres)"
             # 画 KDE 曲线
             sns.kdeplot(group_data, fill=True, alpha=0.3, label=label, color=colors[i])
@@ -630,149 +660,16 @@ def plot_distribution(df, group_col=None, y_var='booking_rate_l30d',
         group_data=df[y_var].dropna()       
         sns.kdeplot(group_data, fill=True, alpha=0.3, color=colors[0])
         sns.kdeplot(group_data, color=colors[0], lw=2)  # 描边
-    
-    
-    plt.xlabel("{y_vars}")
+      
+    plt.xlabel(f"{y_var}")
     plt.ylabel("Densité")
     plt.title(title)
     plt.legend()
-    outpath_kde=os.path.join(output_folder, "host_performance.jpg")
+
+    if filename==None:
+        filename="host_performance.jpg"
+    outpath_kde=os.path.join(output_folder,filename)
     plt.savefig(outpath_kde, dpi=300)
     plt.show()
     return 
     
-
-
-
-
-
-
-def compare_host_profil(df, cols_to_check, group_col="host_is_superhost", y_var="booking_rate_l30d",
-                    output_folder="mod_results"):
-
-    os.makedirs(output_folder, exist_ok=True)     
-    
-    # check :
-    print(f"[INFO] ttest on {len(df)} lines.\n"
-          f"group by : {df[group_col].value_counts(dropna=False)}\n")
-    
-    
-    # compa stat
-    table_host=group_mean_table_ttest(df, cols_to_check=cols_to_check, group_col=group_col)
-    
-    # kde plot
-    plot_booking_rate_distribution(df_input=df, group_col=group_col,y_var=y_var, output_folder=output_folder)    
-    
-    
-    
-    return table_host
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# def compute_booking_rate(row):
-#     if row['has_availability'] == 'f' or row['availability_90'] == 0:#90 一个季度内不活跃
-#         return 0.0  # 下架或不活跃
-#     elif row['availability_30'] == 0:
-#         return 1.0  # 满房
-#     elif row['availability_30'] > 0:
-#         return min(row['number_of_reviews_l30d'] / row['availability_30'], 1.0)
-#     else:
-#         return None  # 其他缺失情况
-
-
-# def classify_activity(row):
-#     if row['has_availability'] == 'f' or row['availability_90'] == 0:
-#         return 'inactive'
-#     elif row['availability_30'] == 0:
-#         return 'full_booked'
-#     else:
-#         return 'active'
-    
-
-
-
-
-# def pricestr2float(df):
-#     df["price"] = df["price"].str.replace(r'[$,]', '', regex=True)
-#     df["price"] = pd.to_numeric(df["price"], errors="coerce")
-#     print(df.price.describe(include='all'))
-#     print(df.price.notna().value_counts())
-#     return
-
-
-# '''
-# room_type:
-# [Entire home/apt|Private room|Shared room|Hotel]
-
-# All homes are grouped into the following three room types:
-
-# Entire place
-# Private room
-# Shared room
-# Entire place
-# Entire places are best if you're seeking a home away from home. With an entire place, you'll have the whole space to yourself. This usually includes a bedroom, a bathroom, a kitchen, and a separate, dedicated entrance. Hosts should note in the description if they'll be on the property or not (ex: "Host occupies first floor of the home"), and provide further details on the listing.
-
-# Private rooms
-# Private rooms are great for when you prefer a little privacy, and still value a local connection. When you book a private room, you'll have your own private room for sleeping and may share some spaces with others. You might need to walk through indoor spaces that another host or guest may occupy to get to your room.
-
-# Shared rooms
-# Shared rooms are for when you don't mind sharing a space with others. When you book a shared room, you'll be sleeping in a space that is shared with others and share the entire space with other people. Shared rooms are popular among flexible travelers looking for new friends and budget-friendly stays.
-# '''
-
-
-
-# def categorize_property(ptype):
-#     if pd.isna(ptype) or str(ptype).strip() == "":
-#         return "others"
-#     ptype_lower = str(ptype).lower()
-
-#     # ENTIRE
-#     if any(word in ptype_lower for word in ["entire", "condo", "loft", "apartment"]):
-#         return "entire"
-
-#     # HOTEL
-#     elif "hotel" in ptype_lower:
-#         return "hotel"
-
-#     # SHARED
-#     elif any(word in ptype_lower for word in ["shared", "bed and breakfast", "boutique"]):
-#         return "shared"
-
-#     # PRIVATE
-#     elif "private" in ptype_lower:
-#         return "private"
-
-#     else:
-#         return "others"
-    
-    
-
-# """
-# reviews_per_month: 	
-# The average number of reviews per month the listing has over the lifetime of the listing.
-
-# Psuedocoe/~SQL:
-
-# IF scrape_date - first_review <= 30 THEN number_of_reviews
-# ELSE number_of_reviews / ((scrape_date - first_review + 1) / (365/12))
-
-
-# """
