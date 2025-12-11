@@ -18,9 +18,6 @@ from mpl_toolkits.mplot3d import Axes3D
 ## my utils
 from utils.preprocess_listings import save_csv_as_latex
 
-
-
-
 def run_check_fa(df, labels,output_folder="fa_results", 
                 n_factors=5, rotation="oblimin", 
                 fa_names=None,
@@ -137,6 +134,9 @@ def run_check_fa(df, labels,output_folder="fa_results",
     
     # plot
     def heatmap_tactics(df_scores, run_scores_fa_on, output_folder):
+        title_map={'mean':'moyens',
+                   'weighted':'pondérés'}
+        
         # init fa & fit 
         fa_scores = FactorAnalyzer(n_factors=2, rotation='oblimin', method='minres') 
         fa_scores.fit(df_scores)
@@ -147,7 +147,8 @@ def run_check_fa(df, labels,output_folder="fa_results",
         
         #plot
         sns.heatmap(loadings_scores_df, annot=True, cmap='coolwarm')
-        plt.title(f'Charge factorielles des tactiques (scores {run_scores_fa_on})')
+        
+        plt.title(f'Charge factorielles des tactiques (scores {title_map.get(run_scores_fa_on,None)})')
         plt.tight_layout()
         #
         scores_mean_heatmap_outpath=os.path.join(output_folder,f'heatmap_fa_scores_{run_scores_fa_on}.jpg')

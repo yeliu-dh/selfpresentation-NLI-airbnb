@@ -127,8 +127,8 @@ def build_model (df_input, x_vars, key_vars=None, to_fillna0=False,
     return df, formula, model
 
 
-def plot_interaction(df_input, x_vars, y_var, tactics_vars, 
-                     tactic_fr, group_col='host_is_superhost', 
+def plot_key_var(df_input, x_vars, y_var, tactics_vars, 
+                     tactic_fr, group_col=None, 
                      ax=None, show=True):
     import pandas as pd
     import numpy as np
@@ -166,8 +166,7 @@ def plot_interaction(df_input, x_vars, y_var, tactics_vars,
     # new model :
     model=smf.ols(formula, data=df).fit()
     
-    tactic_range = np.linspace(df[tactic].min(), df[tactic].max(), 100)
-    groups = ["f","t"]  # non superhost / superhost;若是其他变量则需要改变取值
+    
     
     #------------------ 取控制变量的默认值--------------------
     default_vals = {}
@@ -183,28 +182,86 @@ def plot_interaction(df_input, x_vars, y_var, tactics_vars,
     vars_in_formula = re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', formula)
     default_vals = {k: v for k, v in default_vals.items() if k in vars_in_formula}
 
-    #----------------------预测线------------------------
+    # #----------------------预测线------------------------
+    # tactic_range = np.linspace(df[tactic].min(), df[tactic].max(), 100)
+    # groups = ["f","t"]  # non superhost / superhost;若是其他变量则需要改变取值
+    
+    # rows = []
+    # for g in groups:
+    #     for val in tactic_range:
+    #         row = default_vals.copy()
+    #         row[tactic] = val
+    #         row[group_col] = g
+    #         rows.append(row)
+
+    # predict_df = pd.DataFrame(rows)
+
+    # for col in predict_df.columns:
+    #     if col in df.columns and df[col].dtype == 'O':
+    #         predict_df[col] = predict_df[col].astype(df[col].dtype)
+
+    # predict_df['predicted_booking_rate'] = model.predict(predict_df)
+    # # y 直接取自formula！！
+    
+    # preds = model.get_prediction(predict_df)
+    # pred_summary = preds.summary_frame(alpha=0.05)
+    # predict_df['ci_lower'] = pred_summary['mean_ci_lower']
+    # predict_df['ci_upper'] = pred_summary['mean_ci_upper']
+
+    # #----------------------plot-----------------------------
+    # if ax is None:
+    #     fig, ax = plt.subplots(figsize=(6, 5))
+    # else:
+    #     fig = ax.figure
+
+    # for g in groups:
+    #     group_df = predict_df[predict_df[group_col] == g]
+    #     label = f'Superhôtes' if g == "t" else f'Autres'
+    #     # line
+    #     ax.plot(group_df[tactic], group_df['predicted_booking_rate'], label=label)
+    #     # confiance interval
+    #     ax.fill_between(group_df[tactic], group_df['ci_lower'], group_df['ci_upper'], alpha=0.2)
+
+
+
+    #----------------------预测线------------------------ 
+    tactic_range = np.linspace(df[tactic].min(), df[tactic].max(), 100)
+
     rows = []
-    for g in groups:
+
+    # 情况 A：有分组变量（如 superhost）
+    if group_col is not None:
+        groups = df[group_col].unique()
+
+        for g in groups:
+            for val in tactic_range:
+                row = default_vals.copy()
+                row[tactic] = val
+                row[group_col] = g
+                rows.append(row)
+
+    # 情况 B：无分组变量，只画一条线
+    else:
         for val in tactic_range:
             row = default_vals.copy()
             row[tactic] = val
-            row[group_col] = g
             rows.append(row)
 
     predict_df = pd.DataFrame(rows)
 
+    # 类型对齐（非常重要）
     for col in predict_df.columns:
-        if col in df.columns and df[col].dtype == 'O':
+        if col in df.columns:
             predict_df[col] = predict_df[col].astype(df[col].dtype)
 
+    # 模型预测
     predict_df['predicted_booking_rate'] = model.predict(predict_df)
-    # y 直接取自formula！！
-    
     preds = model.get_prediction(predict_df)
     pred_summary = preds.summary_frame(alpha=0.05)
+
     predict_df['ci_lower'] = pred_summary['mean_ci_lower']
     predict_df['ci_upper'] = pred_summary['mean_ci_upper']
+
 
     #----------------------plot-----------------------------
     if ax is None:
@@ -212,17 +269,40 @@ def plot_interaction(df_input, x_vars, y_var, tactics_vars,
     else:
         fig = ax.figure
 
-    for g in groups:
-        group_df = predict_df[predict_df[group_col] == g]
-        label = f'Superhôtes' if g == "t" else f'Autres'
-        # line
-        ax.plot(group_df[tactic], group_df['predicted_booking_rate'], label=label)
-        # confiance interval
-        ax.fill_between(group_df[tactic], group_df['ci_lower'], group_df['ci_upper'], alpha=0.2)
+    # 情况 A：有分组，多条线
+    if group_col is not None:
+        for g in groups:
+            group_df = predict_df[predict_df[group_col] == g]
+            label = str(g)
+            if group_col=="host_is_superhost":
+                label= f'Superhôtes' if g == "t" else f'Autres'
 
-    # sig
-    interaction_term = f"C({group_col})[T.t]:{tactic}"
-    pval = model.pvalues.get(interaction_term, None)
+            ax.plot(group_df[tactic], group_df['predicted_booking_rate'],
+                    label=label)
+            ax.fill_between(group_df[tactic],
+                            group_df['ci_lower'], group_df['ci_upper'],
+                            alpha=0.2)
+
+        ax.legend()
+
+
+    # 情况 B：无分组，单条线
+    else:
+        ax.plot(predict_df[tactic], predict_df['predicted_booking_rate'], linewidth=2)
+        ax.fill_between(
+            predict_df[tactic],
+            predict_df['ci_lower'],
+            predict_df['ci_upper'],
+            alpha=0.2
+        )
+        
+    
+    #------------------- sig-----------------------
+    if group_col!=None:
+        term = f"C({group_col})[T.t]:{tactic}"
+    else : 
+        term = tactic    
+    pval = model.pvalues.get(term, None)
     if pval is not None:
         # 根据显著性等级选择标注
         if pval < 0.001:
@@ -232,10 +312,17 @@ def plot_interaction(df_input, x_vars, y_var, tactics_vars,
         elif pval < 0.05:
             sig = '*'
         else:
-            sig = None
-    ax.set_xlabel(f"{tactic_fr}")
+            sig = ""
+
+    tactic_fr_map={"ouverture_weighted":"ouverture",
+            "authenticité_weighted":"authenticité",
+            "sociabilité_weighted":"sociabilité",
+            "auto_promotion_weighted":"auto_promotion",
+            "exemplarité_weighted": "exemplarité"}    
+
+    ax.set_xlabel(f"{tactic_fr_map.get(tactic_fr,None)}")
     ax.set_ylabel('Taux de réservation prédit')
-    ax.set_title(f"{tactic_fr} × Superhôte {sig}")
+    ax.set_title(f"{tactic_fr_map.get(tactic_fr,None)} × Superhôte {sig}")
     ax.legend()
     
     if show and ax is None:
@@ -243,8 +330,12 @@ def plot_interaction(df_input, x_vars, y_var, tactics_vars,
 
     return fig, ax
 
+
+
+
+
 def layout_plots(df_input, x_vars, y_var, tactics_vars, 
-                 group_col='host_is_superhost', 
+                 group_col=None,
                  output_folder="mod_results", filename=None):
     import os
     import matplotlib.pyplot as plt
@@ -253,19 +344,27 @@ def layout_plots(df_input, x_vars, y_var, tactics_vars,
     
     # --------------------layout-------------------
     # 使用更细的列分辨率（2 行 × 6 列），方便把第二行两个图放在中间列
-    fig = plt.figure(figsize=(16, 9))
-    gs = gridspec.GridSpec(2, 6, figure=fig, hspace=0.3, wspace=0.25)
-
+    fig = plt.figure(figsize=(16,9))
+    # gs = gridspec.GridSpec(2, 6, figure=fig, hspace=0.3, wspace=0.5)
+    gs = gridspec.GridSpec(2, 6, figure=fig, hspace=0.3, wspace=0.8)
+    
     axes = []
+    
     # 第一行三个：分别占两列宽 (0:2, 2:4, 4:6)
     ax1 = fig.add_subplot(gs[0, 0:2])
     ax2 = fig.add_subplot(gs[0, 2:4])
     ax3 = fig.add_subplot(gs[0, 4:6])
+    # ax1 = fig.add_subplot(gs[0, 0:3])
+    # ax2 = fig.add_subplot(gs[0, 4:7])
+    # ax3 = fig.add_subplot(gs[0, 8:11])
+    
     axes.extend([ax1, ax2, ax3])
 
     # 第二行两个：让它们居中，分别占中间的两列 (1:3 和 3:5)
     ax4 = fig.add_subplot(gs[1, 1:3])
     ax5 = fig.add_subplot(gs[1, 3:5])
+    # ax4 = fig.add_subplot(gs[1, 0:1])  # 左图
+    # ax5 = fig.add_subplot(gs[1, 2:3])  # 右图
     axes.extend([ax4, ax5])
 
     # 确保 tactics_vars 长度为 5（或小于等于 len(axes)）
@@ -275,7 +374,7 @@ def layout_plots(df_input, x_vars, y_var, tactics_vars,
     # 注意：不要在这里重新定义 ax（不要写 ax = axes[i]）
     for ax, tactic_fr in zip(axes[:n_to_plot], tactics_vars[:n_to_plot]):
         # 传入 ax，且在这里不显示单图（plot_interaction 内 show=False）
-        plot_interaction(
+        plot_key_var(
             df_input=df_input,
             x_vars=x_vars,
             y_var=y_var,
@@ -290,12 +389,15 @@ def layout_plots(df_input, x_vars, y_var, tactics_vars,
     if len(tactics_vars) < len(axes):
         for extra_ax in axes[len(tactics_vars):]:
             fig.delaxes(extra_ax)
-    plt.tight_layout()
+    # plt.tight_layout()
 
     # save
     os.makedirs(output_folder, exist_ok=True)
     if filename is None:
-        filename = "interaction_plots.jpg"
+        if group_col!=None:
+            filename = "tactics_interaction_plots.jpg"
+        else : 
+            filename="tactics_plots.jpg"    
     outpath_plots = os.path.join(output_folder, filename)
     plt.savefig(outpath_plots, dpi=300, bbox_inches='tight')
     print(f"[SAVE] plots saved to {outpath_plots}!")
