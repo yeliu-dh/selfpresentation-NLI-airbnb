@@ -92,15 +92,18 @@ def detect_language_langid(text):
 
 def preprocess_host_variables(df_raw):
     start_time=time.time()
+   
     df=df_raw.copy()
     
-    var_ok=["host_has_profile_pic","host_picture_url","host_identity_verified","host_name","number_of_reviews"]
-    var_toprocess=["host_is_superhost","review_scores_rating", "host_since","host_about",
+    var_ok=["host_picture_url","host_name","number_of_reviews"]
+    var_toprocess=["host_has_profile_pic", "host_identity_verified","host_is_superhost","review_scores_rating", "host_since","host_about",
                 "host_response_time","host_response_rate","calculated_host_listings_count"]
     print(f"\n\n******************************HOST VARS******************************\n"
           f"PROCESS PIPELINE :\n"
+          f"- host_has_profile_pic : fillna('f') if not f/t\n"
+          f"- host_identity_verified: fillna('f') if not f/t \n"
           f"- host_is_sueprhost: check ONLY 't'/'f'; fillna('f')\n"
-          f"- review_scores_rating: {print_nan_ratio(df, col='review_scores_rating')*100}% NaN; fillna(0), to numeric; ADD 'has_rating' :1/0'\n"
+          f"- review_scores_rating: {print_nan_ratio(df, col='review_scores_rating')*100}% NaN; fillna(mean), to numeric; ADD 'has_rating' :1/0'\n"
           f"- host_since: ADD 'years_since_host' :float, 0.5-1 year=>1， 0-0.5 year => 0 \n"
           f"- has_host_about: ADD 'has_host_about':1/0','lang:en/fr/other_langs','len:int',\n"
           f"- host_response_time:{print_nan_ratio(df, col='host_response_time')*100}% NaN, fillna('no_response_time') \n"
@@ -113,7 +116,13 @@ def preprocess_host_variables(df_raw):
         if not var in df.columns :
             print(f"[WARNING] {var} not found in df!")
         else :
-            if var=='host_is_superhost':
+            if var=="host_has_profile_pic":
+                df['host_has_profile_pic']=df['host_has_profile_pic'].apply(lambda x : x if x in ['t','f'] else 'f')
+            
+            elif var=="host_identity_verified":
+                df['host_identity_verified']=df['host_identity_verified'].apply(lambda x : x if x in ['t','f'] else 'f')                
+                
+            elif var=='host_is_superhost':
                 # host_is_superhost :对缺失superhost的填f
                 df['host_is_superhost']=df['host_is_superhost'].apply(lambda x : x if x in ['t', 'f'] else None)
                 df['host_is_superhost']=df['host_is_superhost'].fillna('f')
@@ -123,7 +132,12 @@ def preprocess_host_variables(df_raw):
                 # 双变量法：相当于把有/无评分的分开，所以原列中可以fillna(0); 区分信号存在/强度
                 df['has_rating'] = df['review_scores_rating'].notna().astype(int)
                 df['review_scores_rating'] = pd.to_numeric(df['review_scores_rating'], errors='coerce')#有文本？？先转数字再填？
-                df['review_scores_rating'] = df['review_scores_rating'].fillna(0)
+                # 填0太极端，会破坏模型，在筛选后has_rating ==0在20%以下，可以选择平均值
+                median_rating = df['review_scores_rating'].median()
+                mean_rating = df['review_scores_rating'].mean()
+
+                print(f"[INFO] missing review scores are filled by mean :{mean_rating}\n")
+                df['review_scores_rating'] = df['review_scores_rating'].fillna(median_rating)
 
 
             elif var=='host_since':
@@ -160,7 +174,7 @@ def preprocess_host_variables(df_raw):
             
             elif var=='host_about':
                 # host_about：增加两列：has_host_about,lang,len
-                df['has_host_about'] = df['host_about'].notna().astype(int)
+                # df['has_host_about'] = df['host_about'].notna().astype(int)
                 df['lang'] = df['host_about'].apply(detect_language_langid)
 
                 # df['host_about'] = df['host_about'].fillna("nan")#无文本保留nan？
@@ -359,9 +373,36 @@ def add_is_within_km(df, threshold_km):
 # 集合proxy+location处理
 # 描述！
 
+
+##property type
+def categorize_property(ptype):
+    if pd.isna(ptype) or str(ptype).strip() == "":
+        return "others"
+    ptype_lower = str(ptype).lower()
+
+    # ENTIRE
+    if any(word in ptype_lower for word in ["entire", "condo", "loft", "apartment"]):
+        return "entire"
+
+    # HOTEL
+    elif "hotel" in ptype_lower:
+        return "hotel"
+
+    # SHARED
+    elif any(word in ptype_lower for word in ["shared", "bed and breakfast", "boutique"]):
+        return "shared"
+
+    # PRIVATE
+    elif "private" in ptype_lower:
+        return "private"
+
+    else:
+        return "others"
+
+
 def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_90"], 
                         get_boooking_rate_l30d=False, filtrate_by_booking_rate=False,#无输入时默认不按照booking筛选 
-                        obj_vars=["room_type", "minimum_nights","instant_bookable"], 
+                        obj_vars=["room_type", 'property_type',"minimum_nights","instant_bookable"], 
                         threshold_km:int=None, 
                         output_folder="mod_results", filename=None):
     # obj_vars=["room_type", "minimum_nights","instant_bookable"]#all ok,无缺失/异常
@@ -380,7 +421,8 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
         
         f"3) obj vars :\n "
         f"- instant_bookable : fillna('f')\n"
-        f"- minimum_nights : to_numeric, fillna(0)"
+        f"- minimum_nights : to_numeric, fillna(0)\n"
+        f"- property_type : ADD 'property_type_cat': entire, hotel, shared, private, others.\n"
         
         
         f"3) filter : dropna on vars ==> desc df_filtered \n\n"
@@ -414,6 +456,9 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
     if "minimum_nights" in obj_vars:# 又不是数字的值: 2023-12-12
         df['minimum_nights'] = pd.to_numeric(df.minimum_nights, errors='coerce')#无法转换的会变成nan
         df["minimum_nights"]=df["minimum_nights"].fillna(0)
+
+    if "property_type" in obj_vars:
+        df["property_type"] = df["property_type"].apply(categorize_property)
 
         
     vars_to_dropna.extend(obj_vars)
@@ -480,30 +525,35 @@ def group_mean_table(df, cols, group_col='host_is_superhost'):
         result.loc[col, 'Superhôte'] = df[df[group_col]=='t'].get(col).mean()
         result.loc[col, 'Autres']   = df[df[group_col]!='t'].get(col).mean()
     
+
     return result
 
 
 
-def group_mean_table_ttest(df, cols, group_col='host_is_superhost', output_folder="desc_results"):
+def group_mean_table_ttest(df, cols_to_check, group_col='host_is_superhost',
+                           output_folder="mod_results"):
 
-    """
-    返回均值表 + t-test p-value列
-    """
+    os.makedirs(output_folder, exist_ok=True)     
     from scipy.stats import ttest_ind
     
+    if group_col in cols_to_check :
+        cols_to_check.remove(group_col)
+        
+    # check :
     print(f"[INFO] ttest on {len(df)} lines.\n"
           f"group by : {df[group_col].value_counts(dropna=False)}\n")
     
+        
     # filter valid cols:
-    cols_valid=[col for col in cols if col in df.columns]
-    cols_missing=[col for col in cols if col not in cols_valid]
-
-    print(f"[WARNING]{len(cols_missing)} missing cols in df_input :\n {'; '.join(cols_missing)}\n")
+    cols_valid=[col for col in cols_to_check if col in df.columns]
+    cols_missing=[col for col in cols_to_check if col not in cols_valid]
+    if len(cols_missing)>0:
+        print(f"[WARNING]{len(cols_missing)} missing cols in df_input :\n {'; '.join(cols_missing)}\n")
     
     # 或者只筛选非数值列
     non_numeric_cols = [c for c in cols_valid if not pd.api.types.is_numeric_dtype(df[c])]
     if len(non_numeric_cols)>0:
-        print(f"[WARNING] non_numeric_cols:\n {'; '.join(non_numeric_cols)}\n")
+        print(f"[WARNING] ONLY take numeric cols:\n {'; '.join(non_numeric_cols)}\n")
     
     numeric_cols=[c for c in cols_valid if c not in non_numeric_cols]
     print(f"Table of Superhost and others in {len(numeric_cols)} dimensions:\n")
@@ -534,24 +584,89 @@ def group_mean_table_ttest(df, cols, group_col='host_is_superhost', output_folde
             sig = ''
         result.loc[col, 'significance'] = sig
     # result=result.sort_values(by="ttest_p", ascending=True)
-    
-    
-    
-    # save csv and latex:
-    os.makedirs(output_folder, exist_ok=True)
-    outpath_latex=os.path.join(output_folder, 'table_host_latex.tex')
-    
+    ## save 
+    # as latex
     outpath_csv=os.path.join(output_folder, 'table_host.csv')    
     result.to_csv(outpath_csv, index=False)
     print(f"[SAVE] table host csv saved to {outpath_csv}!\n")  
-    
+
+    # as csv 
+    outpath_latex=os.path.join(output_folder, 'table_host_latex.tex')
     save_csv_as_latex(table_csv=result, 
                       output_path=outpath_latex, 
                       caption="Tableau du profil des Superhôtes et des Autres",
                       label="tab:table_host")
-
     
     return result
+
+
+
+
+
+
+def plot_distribution(df, group_col=None, y_var='booking_rate_l30d', 
+                                   output_folder="mod_results"):
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    # 单独使用时需要检查
+    os.makedirs(output_folder, exist_ok=True)     
+
+    df[y_var] = pd.to_numeric(df[y_var], errors='coerce')
+    
+    plt.figure(figsize=(10,6))
+    colors = ['#1f77b4', '#ff7f0e']  # 蓝色/橙色
+    title= "Distribution de Taux de réservation" 
+    
+    if group_col:   
+        for i, val in enumerate(["t", "f"]):
+            group_data = df[df[group_col]==val][y_var].dropna()
+            label = "Superhosts" if val=="t" else "Autres"
+            title+="(Superhôtes vs Autres)"
+            # 画 KDE 曲线
+            sns.kdeplot(group_data, fill=True, alpha=0.3, label=label, color=colors[i])
+            sns.kdeplot(group_data, color=colors[i], lw=2)  
+    else :     
+        group_data=df[y_var].dropna()       
+        sns.kdeplot(group_data, fill=True, alpha=0.3, color=colors[0])
+        sns.kdeplot(group_data, color=colors[0], lw=2)  # 描边
+    
+    
+    plt.xlabel("{y_vars}")
+    plt.ylabel("Densité")
+    plt.title(title)
+    plt.legend()
+    outpath_kde=os.path.join(output_folder, "host_performance.jpg")
+    plt.savefig(outpath_kde, dpi=300)
+    plt.show()
+    return 
+    
+
+
+
+
+
+
+def compare_host_profil(df, cols_to_check, group_col="host_is_superhost", y_var="booking_rate_l30d",
+                    output_folder="mod_results"):
+
+    os.makedirs(output_folder, exist_ok=True)     
+    
+    # check :
+    print(f"[INFO] ttest on {len(df)} lines.\n"
+          f"group by : {df[group_col].value_counts(dropna=False)}\n")
+    
+    
+    # compa stat
+    table_host=group_mean_table_ttest(df, cols_to_check=cols_to_check, group_col=group_col)
+    
+    # kde plot
+    plot_booking_rate_distribution(df_input=df, group_col=group_col,y_var=y_var, output_folder=output_folder)    
+    
+    
+    
+    return table_host
+
 
 
 
