@@ -266,7 +266,7 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
 
     #----------------------plot-----------------------------
     if ax is None:
-        fig, ax = plt.subplots(figsize=(6, 5))
+        fig, ax = plt.subplots(figsize=(6, 4))
     else:
         fig = ax.figure
 
@@ -335,7 +335,7 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
 
 def layout_plots(df_input, x_vars, y_var, tactics_vars, 
                  group_col=None,
-                 output_folder="mod_results", filename=None):
+                 output_folder=None, filename=None):
     import os
     import matplotlib.pyplot as plt
     import matplotlib.gridspec as gridspec
@@ -343,9 +343,9 @@ def layout_plots(df_input, x_vars, y_var, tactics_vars,
     
     # --------------------layout-------------------
     # 使用更细的列分辨率（2 行 × 6 列），方便把第二行两个图放在中间列
-    fig = plt.figure(figsize=(16,9))
+    fig = plt.figure(figsize=(20,9))
     # gs = gridspec.GridSpec(2, 6, figure=fig, hspace=0.3, wspace=0.5)
-    gs = gridspec.GridSpec(2, 6, figure=fig, hspace=0.3, wspace=0.8)
+    gs = gridspec.GridSpec(2, 6, figure=fig, hspace=0.4, wspace=1)
     
     axes = []
     
@@ -353,10 +353,7 @@ def layout_plots(df_input, x_vars, y_var, tactics_vars,
     ax1 = fig.add_subplot(gs[0, 0:2])
     ax2 = fig.add_subplot(gs[0, 2:4])
     ax3 = fig.add_subplot(gs[0, 4:6])
-    # ax1 = fig.add_subplot(gs[0, 0:3])
-    # ax2 = fig.add_subplot(gs[0, 4:7])
-    # ax3 = fig.add_subplot(gs[0, 8:11])
-    
+   
     axes.extend([ax1, ax2, ax3])
 
     # 第二行两个：让它们居中，分别占中间的两列 (1:3 和 3:5)
