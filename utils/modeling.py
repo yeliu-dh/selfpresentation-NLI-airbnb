@@ -16,7 +16,7 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
 # my utils
-# from utils.preprocess_listings import save_csv_as_latex
+from utils.io import save_csv_as_latex
 
 
 
@@ -74,7 +74,7 @@ def check_vif (df, x_vars, y_var, key_vars, group_col):
     vif_df = pd.DataFrame()
     vif_df['Variables']=X.columns
     vif_df["VIF"] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
-    vif_df['niveau_colinearite'] = vif_df["VIF"].apply(
+    vif_df['Niveau_colinearite'] = vif_df["VIF"].apply(
         lambda x: " " if x <= 1 else
                 "*" if x <= 5 else
                 "**" if x <= 10 else
@@ -101,7 +101,7 @@ def save_summary_as_latex(summary, output_folder, tex_filename):
 def build_model (df_input, x_vars, key_vars=None, to_fillna0=False,
                 y_var='booking_rate_l30d', group_col=None, 
                 outpath_folder='mod_results', 
-                tex_filename='ols_summary.tex'):
+                tex_filename='ols_summary.tex', save=False):
     df=df_input.copy()
     
     os.makedirs(outpath_folder, exist_ok=True)
@@ -121,7 +121,8 @@ def build_model (df_input, x_vars, key_vars=None, to_fillna0=False,
     model=smf.ols(formula, data=df).fit()
     summary=model.summary()
     print(summary)
-    save_summary_as_latex(summary, output_folder=outpath_folder, 
+    if save==True:
+        save_summary_as_latex(summary, output_folder=outpath_folder, 
                           tex_filename=tex_filename)
     
     return df, formula, model
@@ -322,15 +323,13 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
 
     ax.set_xlabel(f"{tactic_fr_map.get(tactic_fr,None)}")
     ax.set_ylabel('Taux de réservation prédit')
-    ax.set_title(f"{tactic_fr_map.get(tactic_fr,None)} × Superhôte {sig}")
+    ax.set_title(f"Figure d'interaction :{tactic_fr_map.get(tactic_fr,None)} × Superhôte {sig}")
     ax.legend()
     
     if show and ax is None:
         plt.show()
 
     return fig, ax
-
-
 
 
 
@@ -399,7 +398,9 @@ def layout_plots(df_input, x_vars, y_var, tactics_vars,
         else : 
             filename="tactics_plots.jpg"    
     outpath_plots = os.path.join(output_folder, filename)
+    # plt.title('')?
     plt.savefig(outpath_plots, dpi=300, bbox_inches='tight')
+    
     print(f"[SAVE] plots saved to {outpath_plots}!")
     
     # show

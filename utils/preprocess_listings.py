@@ -6,6 +6,7 @@ import os
 import time
 import numpy as np
 import time
+from utils.io import save_csv_as_latex
 
 
 
@@ -497,23 +498,6 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
 
 
 
-def save_csv_as_latex(table_csv, output_path,caption, label):
-    latex_code = table_csv.round(3).to_latex(
-            caption=caption,
-            label=label,
-            index=True,        # 是否保留行索引（item 名称）
-            escape=False       # False 可以保留 LaTeX 特殊字符，比如 _ 等
-        )
-    # print(f"LATEX : \n {latex_code}")
-    with open(output_path, 'w') as f:
-        f.write(latex_code)
-    print(f"[SAVE] table latex saved to {output_path}!\n")   
-    
-    return 
-
-
-
-
 ## =================================profil comparaison=======================================##
 
 def group_mean_table(df, cols, group_col='host_is_superhost'):
@@ -626,8 +610,9 @@ def plot_violon(df_input, vars, to_fillna0=False, output_folder="mod_results", f
     if filename==None:
         filename="violonplot.jpg"
     outpath_violon=os.path.join(output_folder,filename)
+    plt.tight_layout()#必须在savefig前
+
     plt.savefig(outpath_violon, dpi=300)
-    plt.tight_layout()
     print(f"[SAVE] violon plot saved to {outpath_violon}!")
         
     return 
@@ -649,10 +634,11 @@ def plot_distribution(df, group_col=None, y_var='booking_rate_l30d',
     title= "Distribution de Taux de réservation" 
     
     if group_col:   
+        title += "(Superhôtes vs Autres)"
+
         for i, val in enumerate(["t", "f"]):
             group_data = df[df[group_col]==val][y_var].dropna()
             label = "Superhôtes" if val=="t" else "Autres"
-            title+="(Superhôtes vs Autres)"
             # 画 KDE 曲线
             sns.kdeplot(group_data, fill=True, alpha=0.3, label=label, color=colors[i])
             sns.kdeplot(group_data, color=colors[i], lw=2)  
@@ -671,5 +657,6 @@ def plot_distribution(df, group_col=None, y_var='booking_rate_l30d',
     outpath_kde=os.path.join(output_folder,filename)
     plt.savefig(outpath_kde, dpi=300)
     plt.show()
+    print(f"[SAVE] plot distribution saved to {outpath_kde}!")
     return 
     
