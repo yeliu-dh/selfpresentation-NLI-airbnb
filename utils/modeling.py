@@ -131,6 +131,7 @@ def build_model (df_input, x_vars, key_vars=None, to_fillna0=False,
 def plot_key_var(df_input, x_vars, y_var, tactics_vars, 
                      tactic_fr, group_col=None, 
                      ax=None, show=True):
+    
     import pandas as pd
     import numpy as np
     import matplotlib.pyplot as plt
@@ -139,7 +140,7 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
     
     """
     直接输入formula保证变量一致，因为df、tactics、formula的名字改变，直接重新建模
-    目前只使用host_is_superhost的分组！
+    可以改变group_col，但label中直接显示该col的类别，只有host_is_superhost重写成Superhôtes/Autres！
     
     """
     df=df_input.copy()
@@ -323,7 +324,14 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
 
     ax.set_xlabel(f"{tactic_fr_map.get(tactic_fr,None)}")
     ax.set_ylabel('Taux de réservation prédit')
-    ax.set_title(f"Figure d'interaction :{tactic_fr_map.get(tactic_fr,None)} × Superhôte {sig}")
+    if group_col:
+        if group_col=="host_is_superhost":
+            title=f"Figure d'interaction :{tactic_fr_map.get(tactic_fr,None)} × Superhôte {sig}"
+        else : #其他分组变量
+            title=f"Figure d'interaction :{tactic_fr_map.get(tactic_fr,None)} × {group_col} {sig}"
+    else :#无分组变量
+        title=f"Tactique {tactic_fr_map.get(tactic_fr,None)} {sig}"    
+    ax.set_title(title)
     ax.legend()
     
     if show and ax is None:
