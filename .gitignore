@@ -2,6 +2,11 @@ sandboxMM1/*
 *.zip
 data/*
 
+
+fa_results\lisitngs_*.csv
+
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

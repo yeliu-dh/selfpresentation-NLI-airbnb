@@ -1,0 +1,39 @@
+\begin{table}
+\caption{Résultat des modèles de régression OLS}
+\label{tab:table_mods_keyvars}
+\begin{tabular}{llll}
+\toprule
+ & Basique & Tactiques   & x Superhôte \\
+\midrule
+C(host_is_superhost)[T.t] & 0.0267***
+(0.0026) & 0.0262***
+(0.0026) & 0.0268***
+(0.0026) \\
+ouverture_weighted &  & -0.0017
+(0.0020) & 0.0012
+(0.0023) \\
+C(host_is_superhost)[T.t]:ouverture_weighted &  &  & -0.0105***
+(0.0040) \\
+authenticité_weighted &  & 0.0029
+(0.0021) & 0.0054**
+(0.0025) \\
+C(host_is_superhost)[T.t]:authenticité_weighted &  &  & -0.0093**
+(0.0047) \\
+sociabilité_weighted &  & 0.0060***
+(0.0019) & 0.0061***
+(0.0022) \\
+C(host_is_superhost)[T.t]:sociabilité_weighted &  &  & -0.0003
+(0.0044) \\
+auto_promotion_weighted &  & -0.0013
+(0.0022) & 0.0032
+(0.0025) \\
+C(host_is_superhost)[T.t]:auto_promotion_weighted &  &  & -0.0159***
+(0.0047) \\
+exemplarité_weighted &  & -0.0048**
+(0.0019) & -0.0078***
+(0.0021) \\
+C(host_is_superhost)[T.t]:exemplarité_weighted &  &  & 0.0123***
+(0.0045) \\
+\bottomrule
+\end{tabular}
+\end{table}

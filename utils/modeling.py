@@ -103,15 +103,18 @@ def build_model (df_input, x_vars, key_vars=None, to_fillna0=False,
                 outpath_folder='mod_results', 
                 tex_filename='ols_summary.tex', save=False):
     df=df_input.copy()
-    
     os.makedirs(outpath_folder, exist_ok=True)
     
+    if group_col in x_vars:
+        x_vars.remove(group_col)    
+        print(f"[CHECK] gruop col {group_col} removed from x_vars!\n")
+
     # collect all vars :
     all_vars=x_vars+[y_var]
     if key_vars!=None:
-        all_vars+=key_vars
-        
+        all_vars+=key_vars    
     print(f"[CHECK] isna False in all {len(all_vars)} vars : {df[all_vars].isna().value_counts(dropna=False)}\n")
+    
     
     if to_fillna0==True and key_vars!=None:
         df[key_vars]=df[key_vars].fillna(0)
@@ -127,6 +130,120 @@ def build_model (df_input, x_vars, key_vars=None, to_fillna0=False,
     
     return df, formula, model
 
+
+
+
+from utils.io import save_csv_as_latex
+
+
+#========================================MODELS========================================
+
+
+def make_one_models_table(models_dict, params):
+    # 创建空表
+    df_table = pd.DataFrame(index=params)
+
+    for name, model in models_dict.items():
+        coefs = model.params
+        ses   = model.bse
+        pvals = model.pvalues
+        
+        col_vals = []
+        for var in params:
+            if var in coefs.index:
+                # 加星号
+                stars = ""
+                if pvals[var] < 0.01:
+                    stars = "***"
+                elif pvals[var] < 0.05:
+                    stars = "**"
+                elif pvals[var] < 0.10:
+                    stars = "*"
+
+                coef_str = f"{coefs[var]:.4f}{stars}"
+                se_str   = f"({ses[var]:.4f})"
+                
+                col_vals.append(coef_str + "\n" + se_str)
+            else:
+                col_vals.append("")
+        
+        df_table[name] = col_vals
+
+    return df_table
+
+
+
+def make_models_table(models_dict, vars_kp, 
+                     save=False, output_folder=None, filename_noext=None):
+    
+    """
+    vars_kp: key_vars and groupcol
+    => params_kp, params_ctrl
+    
+    models_dict: {"Model1": model1, "Model2": model2, ...}
+    
+    """
+    
+    last_key = list(models_dict.keys())[-1]
+    model_interaction=models_dict[last_key]#去最后一个覆盖所有交叉项 
+    
+    # extract params
+    params_kp = model_interaction.params.index[
+            model_interaction.params.index.to_series().apply(
+                lambda x: any(v in x for v in vars_kp)
+            )
+        ]
+    params_ctrl=[v for v in model_interaction.params.index if v not in params_kp and v!="Intercept"]
+    print(f"params kp :{params_kp}")
+    print(f"params_ctrl:{params_ctrl}\n")
+    
+    
+    # interate models, get summary table:
+    table_kp= make_one_models_table(models_dict, params_kp)
+    table_ctrl= make_one_models_table(models_dict, params_ctrl)
+    display(table_kp)
+    display(table_ctrl)
+    
+    if save and output_folder:
+        os.makedirs(output_folder, exist_ok=True)
+        if filename_noext==None:
+            filename_kp='table_mods_keyvars.tex'
+            filename_ctrl='table_mods_ctrlvars.tex'
+        else : 
+            filename_kp=filename_noext+'_keyvars.tex'
+            filename_ctrl=filename_noext+'_ctrlvars.tex'
+        
+        output_path_kp=os.path.join(output_folder, filename_kp)
+        output_path_ctrl=os.path.join(output_folder, filename_ctrl)
+        
+        
+        save_csv_as_latex(table_kp, 
+                        output_path=output_path_kp,
+                        caption="Résultat des modèles de régression OLS",
+                        label="tab:table_mods_keyvars", 
+                        round=3)
+        
+        save_csv_as_latex(table_ctrl, 
+                        output_path=output_path_ctrl,
+                        caption="Variables de contrôles dans les modèles de régression OLS",
+                        label="tab:table_mods_keyvars", 
+                        round=3)
+        
+        # print(f"[SAVE] table of models saved to {output_path_kp}\n {output_path_ctrl}!")
+
+    return table_kp,table_ctrl
+
+
+
+
+
+
+
+
+
+
+
+#=========================================PLOT================================================
 
 def plot_key_var(df_input, x_vars, y_var, tactics_vars, 
                      tactic_fr, group_col=None, 
@@ -326,9 +443,9 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
     ax.set_ylabel('Taux de réservation prédit')
     if group_col:
         if group_col=="host_is_superhost":
-            title=f"Figure d'interaction :{tactic_fr_map.get(tactic_fr,None)} × Superhôte {sig}"
+            title=f"{tactic_fr_map.get(tactic_fr,None)} × Superhôte {sig}"
         else : #其他分组变量
-            title=f"Figure d'interaction :{tactic_fr_map.get(tactic_fr,None)} × {group_col} {sig}"
+            title=f"{tactic_fr_map.get(tactic_fr,None)} × {group_col} {sig}"
     else :#无分组变量
         title=f"Tactique {tactic_fr_map.get(tactic_fr,None)} {sig}"    
     ax.set_title(title)
@@ -342,7 +459,7 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
 
 
 def layout_plots(df_input, x_vars, y_var, tactics_vars, 
-                 group_col=None,
+                 group_col=None, save=False,
                  output_folder=None, filename=None):
     import os
     import matplotlib.pyplot as plt
@@ -388,12 +505,29 @@ def layout_plots(df_input, x_vars, y_var, tactics_vars,
             ax=ax,
             show=False
         )
-
+    
     # 如果 tactics < 5，删除多余 axes（可选）
     if len(tactics_vars) < len(axes):
         for extra_ax in axes[len(tactics_vars):]:
             fig.delaxes(extra_ax)
     # plt.tight_layout()
+    
+    #set suptitle
+    if group_col:
+        if group_col=="host_is_superhost":
+            suptitle=f"Figures d'interation entre les tactiques et le statut de Superhôte"
+        else : #其他分组变量
+            suptitle=f"Figures d'interation entre les tactiques et {group_col}"
+    
+    else :#无分组变量
+        # suptitle=f"Tactique {tactic_fr_map.get(tactic_fr,None)} {sig}"    
+        suptitle=""
+        
+    fig.suptitle(
+        suptitle,
+        fontsize=18,
+        y=0.98
+    )
 
     # save
     os.makedirs(output_folder, exist_ok=True)
@@ -401,10 +535,11 @@ def layout_plots(df_input, x_vars, y_var, tactics_vars,
         if group_col!=None:
             filename = "tactics_interaction_plots.jpg"
         else : 
-            filename="tactics_plots.jpg"    
+            filename="tactics_plots.jpg"  
+              
     outpath_plots = os.path.join(output_folder, filename)
-    # plt.title('')?
-    plt.savefig(outpath_plots, dpi=300, bbox_inches='tight')
+    if save:    
+        plt.savefig(outpath_plots, dpi=300, bbox_inches='tight')
     
     print(f"[SAVE] plots saved to {outpath_plots}!")
     
