@@ -4,6 +4,8 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
+
 
 # vif
 from statsmodels.tools.tools import add_constant
@@ -96,6 +98,37 @@ def save_summary_as_latex(summary, output_folder, tex_filename):
     return 
 
 
+def p_to_sig(p):#!= get_term_sig
+    if p < 0.001:
+        return '***'
+    elif p < 0.01:
+        return '**'
+    elif p < 0.05:
+        return '*'
+    else:
+        return ''
+
+
+def get_group_effect(model, key_var, group_col):
+    interaction_term = f"C({group_col})[T.t]:{key_var}"
+
+    # 构造一个 系数选择向量 c, 所有terms归零
+    lin_comb = np.zeros(len(model.params))
+    
+    # 标记tac主效应和交互项的位置：检验1 × β_main + 1 × β_interaction
+    lin_comb[model.params.index.get_loc(key_var)] = 1
+    lin_comb[model.params.index.get_loc(interaction_term)] = 1
+
+    # t 检验
+    t_res = model.t_test(lin_comb)
+    print(f"{interaction_term}\n" 
+          f"coef : {t_res.effect}; pval :{t_res.pvalue:.3f} \n"
+        #   f"{t_res}\n"
+        )
+
+    return t_res
+
+
 
 
 def build_model (df_input, x_vars, key_vars=None, to_fillna0=False,
@@ -105,7 +138,7 @@ def build_model (df_input, x_vars, key_vars=None, to_fillna0=False,
     df=df_input.copy()
     os.makedirs(outpath_folder, exist_ok=True)
     
-    if group_col in x_vars:
+    if group_col!=None and group_col in x_vars:
         x_vars.remove(group_col)    
         print(f"[CHECK] gruop col {group_col} removed from x_vars!\n")
 
@@ -128,6 +161,10 @@ def build_model (df_input, x_vars, key_vars=None, to_fillna0=False,
         save_summary_as_latex(summary, output_folder=outpath_folder, 
                           tex_filename=tex_filename)
     
+    if group_col:
+        for k_var in key_vars:
+            t_res=get_group_effect(model, key_var=k_var, group_col=group_col)            
+            
     return df, formula, model
 
 
@@ -138,6 +175,38 @@ from utils.io import save_csv_as_latex
 
 #========================================MODELS========================================
 
+
+# def make_one_models_table(models_dict, params):
+#     # 创建空表
+#     df_table = pd.DataFrame(index=params)
+
+#     for name, model in models_dict.items():
+#         coefs = model.params
+#         ses   = model.bse
+#         pvals = model.pvalues
+        
+#         col_vals = []
+#         for var in params:
+#             if var in coefs.index:
+#                 # 加星号
+#                 stars = ""
+#                 if pvals[var] < 0.01:
+#                     stars = "***"
+#                 elif pvals[var] < 0.05:
+#                     stars = "**"
+#                 elif pvals[var] < 0.10:
+#                     stars = "*"
+
+#                 coef_str = f"{coefs[var]:.4f}{stars}"
+#                 se_str   = f"({ses[var]:.4f})"
+                
+#                 col_vals.append(coef_str + "\n" + se_str)
+#             else:
+#                 col_vals.append("")
+        
+#         df_table[name] = col_vals
+
+#     return df_table
 
 def make_one_models_table(models_dict, params):
     # 创建空表
@@ -169,8 +238,19 @@ def make_one_models_table(models_dict, params):
         
         df_table[name] = col_vals
 
-    return df_table
+    # --- 添加整体指标 ---
+    overall_stats = ["R²", "Adj. R²", "N"]
+    df_overall = pd.DataFrame(index=overall_stats)
 
+    for name, model in models_dict.items():
+        r2 = f"{model.rsquared:.3f}"
+        adj_r2 = f"{model.rsquared_adj:.3f}"
+        nobs = f"{int(model.nobs)}"
+        df_overall[name] = [r2, adj_r2, nobs]
+
+    # 拼接
+    df_table = pd.concat([df_table, df_overall])
+    return df_table
 
 
 def make_models_table(models_dict, vars_kp, 
@@ -194,8 +274,8 @@ def make_models_table(models_dict, vars_kp,
             )
         ]
     params_ctrl=[v for v in model_interaction.params.index if v not in params_kp and v!="Intercept"]
-    print(f"params kp :{params_kp}")
-    print(f"params_ctrl:{params_ctrl}\n")
+    # print(f"params kp :{params_kp}")
+    # print(f"params_ctrl:{params_ctrl}\n")
     
     
     # interate models, get summary table:
@@ -245,6 +325,22 @@ def make_models_table(models_dict, vars_kp,
 
 #=========================================PLOT================================================
 
+
+def get_term_sig(model, term):
+    pval = model.pvalues.get(term, None)
+    sig = ""
+    if pval is not None:
+        if pval < 0.001:
+            sig = '***'
+        elif pval < 0.01:
+            sig = '**'
+        elif pval < 0.05:
+            sig = '*'
+    return sig
+
+
+
+
 def plot_key_var(df_input, x_vars, y_var, tactics_vars, 
                      tactic_fr, group_col=None, 
                      ax=None, show=True):
@@ -285,14 +381,13 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
     # new model :
     model=smf.ols(formula, data=df).fit()
     
-    
-    
+
     #------------------ 取控制变量的默认值--------------------
     default_vals = {}
-    for col in model.model.exog_names:
-        if ':' in col or col == 'Intercept':
+    for col in model.model.exog_names:# == terms==model.params.index
+        if ':' in col or col == 'Intercept':#不考虑交互项和截距
             continue
-        var_name = col.split('[')[0].replace('C(', '').replace(')', '')
+        var_name = col.split('[')[0].replace('C(', '').replace(')', '')#分类变量去掉外面的括号
         if var_name in df.columns:
             if df[var_name].dtype == 'O' or df[var_name].nunique() < 10:
                 default_vals[var_name] = df[var_name].mode()[0]
@@ -300,54 +395,13 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
                 default_vals[var_name] = df[var_name].mean()
     vars_in_formula = re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', formula)
     default_vals = {k: v for k, v in default_vals.items() if k in vars_in_formula}
-
-    # #----------------------预测线------------------------
-    # tactic_range = np.linspace(df[tactic].min(), df[tactic].max(), 100)
-    # groups = ["f","t"]  # non superhost / superhost;若是其他变量则需要改变取值
-    
-    # rows = []
-    # for g in groups:
-    #     for val in tactic_range:
-    #         row = default_vals.copy()
-    #         row[tactic] = val
-    #         row[group_col] = g
-    #         rows.append(row)
-
-    # predict_df = pd.DataFrame(rows)
-
-    # for col in predict_df.columns:
-    #     if col in df.columns and df[col].dtype == 'O':
-    #         predict_df[col] = predict_df[col].astype(df[col].dtype)
-
-    # predict_df['predicted_booking_rate'] = model.predict(predict_df)
-    # # y 直接取自formula！！
-    
-    # preds = model.get_prediction(predict_df)
-    # pred_summary = preds.summary_frame(alpha=0.05)
-    # predict_df['ci_lower'] = pred_summary['mean_ci_lower']
-    # predict_df['ci_upper'] = pred_summary['mean_ci_upper']
-
-    # #----------------------plot-----------------------------
-    # if ax is None:
-    #     fig, ax = plt.subplots(figsize=(6, 5))
-    # else:
-    #     fig = ax.figure
-
-    # for g in groups:
-    #     group_df = predict_df[predict_df[group_col] == g]
-    #     label = f'Superhôtes' if g == "t" else f'Autres'
-    #     # line
-    #     ax.plot(group_df[tactic], group_df['predicted_booking_rate'], label=label)
-    #     # confiance interval
-    #     ax.fill_between(group_df[tactic], group_df['ci_lower'], group_df['ci_upper'], alpha=0.2)
-
-
+    # 相当于取出所有的terms
 
     #----------------------预测线------------------------ 
     tactic_range = np.linspace(df[tactic].min(), df[tactic].max(), 100)
-
+    # 取该tac的最大最小值，切割成100份
+    
     rows = []
-
     # 情况 A：有分组变量（如 superhost）
     if group_col is not None:
         groups = df[group_col].unique()
@@ -363,25 +417,27 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
     else:
         for val in tactic_range:
             row = default_vals.copy()
-            row[tactic] = val
+            row[tactic] = val # 对于考察的var覆盖默认值
             rows.append(row)
 
     predict_df = pd.DataFrame(rows)
-
-    # 类型对齐（非常重要）
+    # display(predict_df)
+    
+    # 类型对齐（非常重要）why?
     for col in predict_df.columns:
         if col in df.columns:
             predict_df[col] = predict_df[col].astype(df[col].dtype)
 
-    # 模型预测
+    # 模型预测，从model已知y==booking
     predict_df['predicted_booking_rate'] = model.predict(predict_df)
     preds = model.get_prediction(predict_df)
     pred_summary = preds.summary_frame(alpha=0.05)
 
     predict_df['ci_lower'] = pred_summary['mean_ci_lower']
     predict_df['ci_upper'] = pred_summary['mean_ci_upper']
-
-
+    # display(predict_df)
+    
+    
     #----------------------plot-----------------------------
     if ax is None:
         fig, ax = plt.subplots(figsize=(6, 4))
@@ -390,11 +446,38 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
 
     # 情况 A：有分组，多条线
     if group_col is not None:
+        # for g in groups:
+        #     group_df = predict_df[predict_df[group_col] == g]
+        #     label = str(g)
+            
+        #     if group_col=="host_is_superhost":
+        #         label= f'Superhôtes' if g == "t" else f'Autres'      
+        
+            # ax.plot(group_df[tactic], group_df['predicted_booking_rate'],
+            #         label=label)
+            # ax.fill_between(group_df[tactic],
+            #                 group_df['ci_lower'], group_df['ci_upper'],
+            #                 alpha=0.2)
+
+        
+        
         for g in groups:
             group_df = predict_df[predict_df[group_col] == g]
-            label = str(g)
+            
+            # 取对应的显著性
+            if g == "t":
+                # term = f"C({group_col})[T.t]:{tactic}" # 直接取了交互项的sig，但是t组应该是主效应+交互项
+                t_res=get_group_effect(model=model, key_var=tactic, group_col=group_col)         
+                sig=p_to_sig(t_res.pvalue)
+                
+            else:
+                term = tactic  # 或者 main effect
+                sig = get_term_sig(model, term)
+
             if group_col=="host_is_superhost":
                 label= f'Superhôtes' if g == "t" else f'Autres'
+        
+            label = f"{label} {sig}" if sig else label
 
             ax.plot(group_df[tactic], group_df['predicted_booking_rate'],
                     label=label)
@@ -418,20 +501,10 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
     
     #------------------- sig-----------------------
     if group_col!=None:
-        term = f"C({group_col})[T.t]:{tactic}"
+        term = f"C({group_col})[T.t]:{tactic}" 
     else : 
-        term = tactic    
-    pval = model.pvalues.get(term, None)
-    if pval is not None:
-        # 根据显著性等级选择标注
-        if pval < 0.001:
-            sig = '***'
-        elif pval < 0.01:
-            sig = '**'
-        elif pval < 0.05:
-            sig = '*'
-        else:
-            sig = ""
+        term = tactic
+    sig=get_term_sig(model, term)
 
     tactic_fr_map={"ouverture_weighted":"ouverture",
             "authenticité_weighted":"authenticité",
@@ -441,13 +514,14 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
 
     ax.set_xlabel(f"{tactic_fr_map.get(tactic_fr,None)}")
     ax.set_ylabel('Taux de réservation prédit')
+    
     if group_col:
         if group_col=="host_is_superhost":
-            title=f"{tactic_fr_map.get(tactic_fr,None)} × Superhôte {sig}"
+            title=f"{tactic_fr_map.get(tactic_fr,None)} × Superhôte"# {sig}
         else : #其他分组变量
-            title=f"{tactic_fr_map.get(tactic_fr,None)} × {group_col} {sig}"
+            title=f"{tactic_fr_map.get(tactic_fr,None)} × {group_col}"# {sig}
     else :#无分组变量
-        title=f"Tactique {tactic_fr_map.get(tactic_fr,None)} {sig}"    
+        title=f"Tactique {tactic_fr_map.get(tactic_fr,None)} {sig}"
     ax.set_title(title)
     ax.legend()
     
@@ -455,6 +529,8 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
         plt.show()
 
     return fig, ax
+
+
 
 
 
@@ -541,10 +617,81 @@ def layout_plots(df_input, x_vars, y_var, tactics_vars,
     if save:    
         plt.savefig(outpath_plots, dpi=300, bbox_inches='tight')
     
-    print(f"[SAVE] plots saved to {outpath_plots}!")
+        print(f"[SAVE] plots saved to {outpath_plots}!")
     
     # show
     plt.show()
     
     return fig, axes
+
+
+
+def modeling_main(df_input, x_vars, y_var, key_vars, group_col,
+                output_folder=None,
+                save_models_summary=False,  
+                save_models_table=True,
+                save_plots=True
+                ):
+    
+    print("check output folder".center(100,'='))
+    os.makedirs(output_folder, exist_ok=True)
+    print(f"[INFO] results saved to {output_folder}!\n")
+    
+    print("vif".center(100, '='))    
+    # check_vif (df=df_input, x_vars=x_vars, y_var=y_var, key_vars=key_vars, group_col=None)
+
+    print("basic model".center(100,"="))
+    df, formula, model_basic=build_model (df_input=df_input,
+            x_vars=x_vars, key_vars=None, #*
+            to_fillna0=True,
+            y_var=y_var, group_col=None, #*
+            outpath_folder=output_folder, 
+            tex_filename='ols_summary_basic.tex', 
+            save=save_models_summary)
+    
+    print("tactics model".center(100, '='))
+    df, formula, model_tactics=build_model (df_input=df_input,
+            x_vars=x_vars, key_vars=key_vars, 
+            to_fillna0=True,
+            y_var=y_var, group_col=None, #*
+            outpath_folder=output_folder, 
+            tex_filename='ols_summary_tactics.tex', 
+            save=save_models_summary)
+    
+    print("interaction model".center(100,'='))
+    df, formula, model_interaction=build_model (df_input=df_input, 
+            x_vars=x_vars, key_vars=key_vars, 
+            to_fillna0=True,
+            y_var=y_var, group_col=group_col, 
+            outpath_folder=output_folder, 
+            tex_filename='ols_summary_interaction.tex', 
+            save=save_models_summary)
+    
+    print("models table".center(100,'=')) 
+    models_dict = {
+        "Basique": model_basic,
+        "Tactiques  ": model_tactics,
+        "x Superhôte": model_interaction
+    }
+    table_kp, table_ctrl=make_models_table(models_dict=models_dict, 
+                    vars_kp=key_vars+[group_col], 
+                    save=save_models_table, output_folder=output_folder, filename_noext=None)
+        
+        
+    print("tactics plots".center(100,'='))
+    layout_plots(df_input=df, x_vars=x_vars,y_var=y_var,
+            tactics_vars=key_vars, 
+            group_col=None,
+            save=save_plots, 
+            output_folder=output_folder,
+            filename=None)
+    
+    print("interaction plots".center(100,"="))
+    layout_plots(df_input=df, x_vars=x_vars,y_var=y_var,
+            tactics_vars=key_vars,
+            save=save_plots, 
+            group_col='host_is_superhost', 
+            output_folder=output_folder,
+            )
+    return 
 

@@ -21,6 +21,7 @@ from utils.io import save_csv_as_latex
 def run_check_fa(DF, ITEMS, OUTPUT_FOLDER, 
                 N_FACTORS=5, ROTATION="oblimin", 
                 FA_NAMES=None,
+                FA_ITEMS_DICT=None,
                 get_items_heatmap=True,
                 get_items_table=True, low_comm_t=0.5,
                 get_factor_scores_by='both',
@@ -81,9 +82,30 @@ def run_check_fa(DF, ITEMS, OUTPUT_FOLDER,
         plt.savefig(outpath_heatmap, dpi=300)
         plt.show()
         print(f"[SAVE] heatmap of items saved to {outpath_heatmap}!\n")
+    
+    
+    
+    print(f'organise input FA_ITEMS_DICT as latex table'.center(100, '-'))
+    if FA_ITEMS_DICT:# dict to csv
+        fa_items_str_dict = {
+            k: ", ".join(v)
+            for k, v in FA_ITEMS_DICT.items()
+        }
 
+        fa_items_df=pd.DataFrame.from_dict(fa_items_str_dict, orient='index',columns=['items'])
+        fa_items_df.reset_index(names='Tactique', inplace=True)
+        display(fa_items_df)
+               
+        outpath_fa_items=os.path.join(OUTPUT_FOLDER, "latex","fa_items_table.tex")
+        save_csv_as_latex(table_csv=fa_items_df, 
+                          output_path=outpath_fa_items, 
+                          caption="Bilan des items des tactiques de la présentation de soi", 
+                          label="tab:fa_items_table", 
+                          round=3,escape=True, index=True)
+        
+        
 
-    if get_items_table==True:
+    if get_items_table==True:#***
         print("# ------------------------------------tab items fa------------------------------------")
         loadings = fa.loadings_
         communalities = fa.get_communalities()
@@ -91,8 +113,8 @@ def run_check_fa(DF, ITEMS, OUTPUT_FOLDER,
 
         # gamma 和 sigma
         abs_loadings = np.abs(loadings)
-        gamma = abs_loadings.max(axis=1)                   # 最大因子载荷
-        sigma = np.sort(abs_loadings, axis=1)[:, -2]       # 第二大因子载荷
+        gamma = abs_loadings.max(axis=1)                   # 最大因子载荷 !
+        sigma = np.sort(abs_loadings, axis=1)[:, -2]       # 第二大因子载荷!
 
         # get DataFrame
         desired_order = None  # 先定义，保证一定存在
@@ -121,9 +143,27 @@ def run_check_fa(DF, ITEMS, OUTPUT_FOLDER,
         # desired_order=['gamma','sigma','ouverture','authenticité','sociabilité',"auto_promotion","exemplarité",'communalité','spécificité']
         if desired_order:
             df_fa=df_fa[desired_order]
-            
+        
+        if FA_ITEMS_DICT and FA_NAMES:
+            df_fa_num = df_fa.copy()# round的是时候不能有'-'
+            factor_cols = FA_NAMES #选取因子列
+            # 先把所有因子列设为 "-"
+            df_fa.loc[:, factor_cols] = '-'
+
+            # 再逐个因子填回“所属 item”的 loading
+            for factor, items in FA_ITEMS_DICT.items():
+                for item in items:
+                    if item in df_fa.index and factor in df_fa.columns:
+                        df_fa.loc[item, factor] = round(
+                            float(df_fa_num.loc[item, factor]), 3
+                        )
+                        df_fa.loc[item]
+        # df_fa=df_fa.round(4)
+
         display(df_fa)
         
+    
+            
         #info
         print(f"[INFO] mean COMM (> 0.6):{communalities.mean()}\n"
                     f"[INFO] mean UNIQ : {uniqueness.mean()}\n")
@@ -131,24 +171,28 @@ def run_check_fa(DF, ITEMS, OUTPUT_FOLDER,
         low_comm_items = df_fa[df_fa['communalité'] <low_comm_t ]
         print(f"[WARNING] {len(low_comm_items)}/{len(df_fa)} low communality items (< {low_comm_t}):\n{';'.join(low_comm_items.index)}\n")
 
+
+
         # save as csv
         outpath_items_fa_csv=os.path.join(OUTPUT_FOLDER, 'items_fa.csv')
         df_fa.to_csv(outpath_items_fa_csv, index=True)##index!!!
         print(f"[SAVE] table saved to {outpath_items_fa_csv}!\n")
         
-        # -----------------------------tab2latex-------------------------------                
-        outpath_items_fa_latex=os.path.join(OUTPUT_FOLDER, 'items_fa.tex')        
+        # save as latex               
+        outpath_items_fa_latex=os.path.join(OUTPUT_FOLDER, 'latex','items_fa.tex')        
         save_csv_as_latex(table_csv=df_fa, output_path=outpath_items_fa_latex, 
                           caption="Tableau de l'analyse factorielle des items", 
-                          label="tab:items_fa")
+                          label="tab:items_fa", 
+                          round=3,
+                          escape=True,
+                          index=True)
+        
+        
         
                 
         ## ps.
         print(f"[WARNING] remember to RENAME factors by heatmap of zsc data!!!")            
-      
-
-
-
+    
 
     print("-------------------------------get fa scores(tactics)---------------------------------")
     # 从原始 DF 中筛选非空行 (df_dropna) 做 FA
@@ -191,9 +235,9 @@ def run_check_fa(DF, ITEMS, OUTPUT_FOLDER,
         # display(df_scores_weighted.head())
         
         if FA_NAMES:
-            df_scores_weighted.columns=[f"{col}_weighted" for col in FA_NAMES]
+            df_scores_weighted.columns=[f"{col}_pondéré" for col in FA_NAMES]
             #reorder:
-            weighted_order=[f"{tac}_weighted" for tac in desired_order_tactics]
+            weighted_order=[f"{tac}_pondéré" for tac in desired_order_tactics]
             print(f"WEIGHTED ORDER:{weighted_order}")
             df_scores_weighted=df_scores_weighted[weighted_order]
 
@@ -219,14 +263,16 @@ def run_check_fa(DF, ITEMS, OUTPUT_FOLDER,
         # data
         loadings_scores = fa_scores.loadings_
         loadings_scores_df=pd.DataFrame(loadings_scores, index=df_scores.columns)
-        
+        display(loadings_scores_df)
         # save as latex
-        outpath_scores_fa_latex=os.path.join(OUTPUT_FOLDER, f"tactics_{title_map.get(run_scores_fa_on,None)}_fa.tex")        
+        outpath_scores_fa_latex=os.path.join(OUTPUT_FOLDER, "latex",f"tactics_{run_scores_fa_on}_fa.tex")        
         save_csv_as_latex(table_csv=loadings_scores_df, output_path=outpath_scores_fa_latex,
                           caption="Tableau de l'analyse factorielle des tactiques",
                           label="tab: tactics_fa",
-                          round=3)        
-        print(f"[SAVE] table of {title_map.get(run_scores_fa_on,None)} scores saved to {outpath_scores_fa_latex}!\n")
+                          round=3, escape=True, index=True)       
+    
+         
+        # print(f"[SAVE] table of {title_map.get(run_scores_fa_on,None)} scores saved to {outpath_scores_fa_latex}!\n")
 
         # save as csv :?
         
@@ -256,7 +302,7 @@ def run_check_fa(DF, ITEMS, OUTPUT_FOLDER,
         print(f"[INFO] choisir between 'mean','weighted','both' to run fa on tactics' scores!\n")
 
 
-    print("----------------------------merge data to listings---------------------------------")
+    print("----------------------------merge data to listings(keep nan)---------------------------------")
     df_dropna = df_dropna.reset_index(drop=True)
     df_scores=df_scores.reset_index(drop=True)
     df_tactics=pd.concat([df_dropna, df_scores], axis=1)# horizontal
