@@ -68,7 +68,6 @@ def save_csv_as_latex(table_csv, output_path, caption, label, round=4,
     )
     # print(latex_code)
     
-    
     # 保存
     with open(output_path, 'w') as f:
         f.write(latex_code)
