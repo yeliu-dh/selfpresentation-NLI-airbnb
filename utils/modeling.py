@@ -88,14 +88,14 @@ def check_vif (df, x_vars, y_var, key_vars, group_col):
 
 
 
-def save_summary_as_latex(summary, output_folder, tex_filename):
-    latex_str =summary.as_latex()
-    outpath_summary=os.path.join(output_folder, tex_filename)
+# def save_summary_as_latex(summary, output_folder, tex_filename):
+#     latex_str =summary.as_latex()
+#     outpath_summary=os.path.join(output_folder, 'latex', tex_filename)
 
-    with open(outpath_summary, "w") as f:
-        f.write(latex_str)
-        print(f"[SAVE] model summary saved to {outpath_summary}!")
-    return 
+#     with open(outpath_summary, "w") as f:
+#         f.write(latex_str)
+#         print(f"[SAVE] model summary saved to {outpath_summary}!")
+#     return 
 
 
 def p_to_sig(p):#!= get_term_sig
@@ -133,10 +133,13 @@ def get_group_effect(model, key_var, group_col):
 
 def build_model (df_input, x_vars, key_vars=None, to_fillna0=False,
                 y_var='booking_rate_l30d', group_col=None, 
-                outpath_folder='mod_results', 
-                tex_filename='ols_summary.tex', save=False):
+                
+                # outpath_folder='mod_results', 
+                # tex_filename='ols_summary.tex', 
+                # save=False
+                ):
     df=df_input.copy()
-    os.makedirs(outpath_folder, exist_ok=True)
+    # os.makedirs(outpath_folder, exist_ok=True)
     
     if group_col!=None and group_col in x_vars:
         x_vars.remove(group_col)    
@@ -157,9 +160,10 @@ def build_model (df_input, x_vars, key_vars=None, to_fillna0=False,
     model=smf.ols(formula, data=df).fit()
     summary=model.summary()
     print(summary)
-    if save==True:
-        save_summary_as_latex(summary, output_folder=outpath_folder, 
-                          tex_filename=tex_filename)
+    
+    # if save==True:
+    #     save_summary_as_latex(summary, output_folder=outpath_folder, 
+    #                       tex_filename=tex_filename)
     
     if group_col:
         for k_var in key_vars:
@@ -253,7 +257,7 @@ def make_one_models_table(models_dict, params):
     return df_table
 
 
-def make_models_table(models_dict, vars_kp, 
+def make_models_table(models_dict, vars_kp, ROUND=None, 
                      save=False, output_folder=None, filename_noext=None):
     
     """
@@ -293,23 +297,28 @@ def make_models_table(models_dict, vars_kp,
             filename_kp=filename_noext+'_keyvars.tex'
             filename_ctrl=filename_noext+'_ctrlvars.tex'
         
-        output_path_kp=os.path.join(output_folder, filename_kp)
-        output_path_ctrl=os.path.join(output_folder, filename_ctrl)
+        output_path_kp=os.path.join(output_folder,'latex', filename_kp)
+        output_path_ctrl=os.path.join(output_folder, 'latex',filename_ctrl)
         
         
         save_csv_as_latex(table_kp, 
                         output_path=output_path_kp,
                         caption="Résultat des modèles de régression OLS",
-                        label="tab:table_mods_keyvars", 
-                        round=3)
+                        label="tab:table_mods_keyvars",
+                        escape=False, #* 
+                        index=True,
+                        round=ROUND)
         
         save_csv_as_latex(table_ctrl, 
                         output_path=output_path_ctrl,
                         caption="Variables de contrôles dans les modèles de régression OLS",
                         label="tab:table_mods_keyvars", 
-                        round=3)
+                        escape=False, #* 
+                        index=True,
+                        round=ROUND)
         
-        # print(f"[SAVE] table of models saved to {output_path_kp}\n {output_path_ctrl}!")
+        
+        
 
     return table_kp,table_ctrl
 
@@ -361,11 +370,18 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
     formula=write_formula(df=df, x_vars=x_vars, y_var=y_var, key_vars=tactics_vars, group_col=group_col)
 
     #-----------------------处理变量名！（无法识别accent）-----------------------    
-    rename_tactics_map={"ouverture_weighted":"openness",
-                        "authenticité_weighted":"authenticity",
-                        "sociabilité_weighted":"sociability",
-                        "auto_promotion_weighted":"self_promotion",
-                        "exemplarité_weighted": "exemplification"}    
+    # rename_tactics_map={"ouverture_pondéré":"openness",
+    #                     "authenticité_pondéré":"authenticity",
+    #                     "sociabilité_pondéré":"sociability",
+    #                     "auto_promotion_pondéré":"self_promotion",
+    #                     "exemplarité_pondéré": "exemplification"}
+    
+    rename_tactics_map={"ouverture":"openness",
+                        "authenticité":"authenticity",
+                        "sociabilité":"sociability",
+                        "auto_promotion":"self_promotion",
+                        "exemplarité": "exemplification"}
+
     # new df : 
     df.rename(columns=rename_tactics_map, inplace=True)
     
@@ -506,22 +522,32 @@ def plot_key_var(df_input, x_vars, y_var, tactics_vars,
         term = tactic
     sig=get_term_sig(model, term)
 
-    tactic_fr_map={"ouverture_weighted":"ouverture",
-            "authenticité_weighted":"authenticité",
-            "sociabilité_weighted":"sociabilité",
-            "auto_promotion_weighted":"auto_promotion",
-            "exemplarité_weighted": "exemplarité"}    
+    # tactic_fr_map={"ouverture_pondéré":"ouverture",
+    #         "authenticité_pondéré":"authenticité",
+    #         "sociabilité_pondéré":"sociabilité",
+    #         "auto_promotion_pondéré":"auto_promotion",
+    #         "exemplarité_pondéré": "exemplarité"}    
 
-    ax.set_xlabel(f"{tactic_fr_map.get(tactic_fr,None)}")
+    # ax.set_xlabel(f"{tactic_fr_map.get(tactic_fr,None)}")
+    ax.set_xlabel(f"{tactic_fr}")
     ax.set_ylabel('Taux de réservation prédit')
     
+    # if group_col:
+    #     if group_col=="host_is_superhost":
+    #         title=f"{tactic_fr_map.get(tactic_fr,None)} × Superhôte"# {sig}
+    #     else : #其他分组变量
+    #         title=f"{tactic_fr_map.get(tactic_fr,None)} × {group_col}"# {sig}
+    # else :#无分组变量
+    #     title=f"Tactique {tactic_fr_map.get(tactic_fr,None)} {sig}"
+        
     if group_col:
         if group_col=="host_is_superhost":
-            title=f"{tactic_fr_map.get(tactic_fr,None)} × Superhôte"# {sig}
+            title=f"{tactic_fr} × Superhôte"# {sig}
         else : #其他分组变量
-            title=f"{tactic_fr_map.get(tactic_fr,None)} × {group_col}"# {sig}
+            title=f"{tactic_fr} × {group_col}"# {sig}
     else :#无分组变量
-        title=f"Tactique {tactic_fr_map.get(tactic_fr,None)} {sig}"
+        title=f"Tactique {tactic_fr} {sig}"
+        
     ax.set_title(title)
     ax.legend()
     
@@ -627,45 +653,51 @@ def layout_plots(df_input, x_vars, y_var, tactics_vars,
 
 
 def modeling_main(df_input, x_vars, y_var, key_vars, group_col,
-                output_folder=None,
-                save_models_summary=False,  
+                OUTPUT_FOLDER=None,
+                run_vif=False,
+                # save_models_summary=False,  
                 save_models_table=True,
-                save_plots=True
+                save_plots=True,
+                ROUND=None
                 ):
     
     print("check output folder".center(100,'='))
-    os.makedirs(output_folder, exist_ok=True)
-    print(f"[INFO] results saved to {output_folder}!\n")
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+    print(f"[INFO] results saved to {OUTPUT_FOLDER}!\n")
     
-    print("vif".center(100, '='))    
-    # check_vif (df=df_input, x_vars=x_vars, y_var=y_var, key_vars=key_vars, group_col=None)
+    if run_vif:    
+        print("vif".center(100, '='))    
+        check_vif (df=df_input, x_vars=x_vars, y_var=y_var, key_vars=key_vars, group_col=None)
 
     print("basic model".center(100,"="))
     df, formula, model_basic=build_model (df_input=df_input,
             x_vars=x_vars, key_vars=None, #*
             to_fillna0=True,
             y_var=y_var, group_col=None, #*
-            outpath_folder=output_folder, 
-            tex_filename='ols_summary_basic.tex', 
-            save=save_models_summary)
+            # outpath_folder=OUTPUT_FOLDER, 
+            # tex_filename='ols_summary_basic.tex', 
+            # save=save_models_summary
+            )
     
     print("tactics model".center(100, '='))
     df, formula, model_tactics=build_model (df_input=df_input,
             x_vars=x_vars, key_vars=key_vars, 
             to_fillna0=True,
             y_var=y_var, group_col=None, #*
-            outpath_folder=output_folder, 
-            tex_filename='ols_summary_tactics.tex', 
-            save=save_models_summary)
+            # outpath_folder=OUTPUT_FOLDER, 
+            # tex_filename='ols_summary_tactics.tex', 
+            # save=save_models_summary
+            )
     
     print("interaction model".center(100,'='))
     df, formula, model_interaction=build_model (df_input=df_input, 
             x_vars=x_vars, key_vars=key_vars, 
             to_fillna0=True,
             y_var=y_var, group_col=group_col, 
-            outpath_folder=output_folder, 
-            tex_filename='ols_summary_interaction.tex', 
-            save=save_models_summary)
+            # outpath_folder=OUTPUT_FOLDER, 
+            # tex_filename='ols_summary_interaction.tex', 
+            # save=save_models_summary
+            )
     
     print("models table".center(100,'=')) 
     models_dict = {
@@ -674,8 +706,11 @@ def modeling_main(df_input, x_vars, y_var, key_vars, group_col,
         "x Superhôte": model_interaction
     }
     table_kp, table_ctrl=make_models_table(models_dict=models_dict, 
-                    vars_kp=key_vars+[group_col], 
-                    save=save_models_table, output_folder=output_folder, filename_noext=None)
+                    vars_kp=key_vars+[group_col], #+langue？ 
+                    ROUND=ROUND,
+                    save=save_models_table, 
+                    output_folder=OUTPUT_FOLDER, 
+                    filename_noext=None)
         
         
     print("tactics plots".center(100,'='))
@@ -683,7 +718,7 @@ def modeling_main(df_input, x_vars, y_var, key_vars, group_col,
             tactics_vars=key_vars, 
             group_col=None,
             save=save_plots, 
-            output_folder=output_folder,
+            output_folder=OUTPUT_FOLDER,
             filename=None)
     
     print("interaction plots".center(100,"="))
@@ -691,7 +726,7 @@ def modeling_main(df_input, x_vars, y_var, key_vars, group_col,
             tactics_vars=key_vars,
             save=save_plots, 
             group_col='host_is_superhost', 
-            output_folder=output_folder,
+            output_folder=OUTPUT_FOLDER,
             )
     return 
 

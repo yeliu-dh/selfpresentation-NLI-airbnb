@@ -525,8 +525,6 @@ def group_mean_table(df, cols, group_col='host_is_superhost'):
 
 
 
-
-
 def group_mean_table_ttest(df, cols_to_check, group_col='host_is_superhost',
                            save=False, output_folder="mod_results", filename_noext=None):
 
@@ -622,10 +620,10 @@ def group_mean_table_ttest(df, cols_to_check, group_col='host_is_superhost',
         # as csv
         outpath_csv=os.path.join(output_folder,filename_csv)    
         result.to_csv(outpath_csv, index=True)# index TRUE!!!
-        print(f"[SAVE] table host csv saved to {outpath_csv}!\n")  
+        print(f"✅ [SAVE] table host csv saved to {outpath_csv}!\n")  
 
         # as latex 
-        outpath_latex=os.path.join(output_folder, filename_tex)
+        outpath_latex=os.path.join(output_folder,"latex", filename_tex)
         save_csv_as_latex(table_csv=result, 
                         output_path=outpath_latex, 
                         caption="Tableau du profil des Superhôtes et des Autres",
@@ -649,17 +647,33 @@ def plot_distribution(df, group_col=None, y_var='booking_rate_l30d',
     
     plt.figure(figsize=(10,6))
     colors = ['#1f77b4', '#ff7f0e']  # 蓝色/橙色
-    title= "Distribution de Taux de réservation" 
     
-    if group_col:   
-        title += "(Superhôtes vs Autres)"
+
+    title= f"Distribution de {y_var}" 
+    if y_var=="booking_rate_l30d":
+        title=f"Distribution de Taux de réservation" # no touch to y_var!
+
+    if group_col:
+        groups = df[group_col].unique()
+        print(f'[INFO] groups of {group_col}:{groups}')
+        
+        group_title=f" ({group_col} {groups[0]} vs {groups[1]})" #开头空一格
+        if group_col=='host_is_superhost':
+            group_title= " (Superhôtes vs Autres)"
+        title+=group_title
+
 
         for i, val in enumerate(["t", "f"]):
             group_data = df[df[group_col]==val][y_var].dropna()
-            label = "Superhôtes" if val=="t" else "Autres"
+            label=i
+            if group_col=="host_is_superhost":
+                label = "Superhôtes" if val=="t" else "Autres"
+            
             # 画 KDE 曲线
             sns.kdeplot(group_data, fill=True, alpha=0.3, label=label, color=colors[i])
             sns.kdeplot(group_data, color=colors[i], lw=2)  
+    
+    
     else :     
         group_data=df[y_var].dropna()       
         sns.kdeplot(group_data, fill=True, alpha=0.3, color=colors[0])
@@ -671,11 +685,12 @@ def plot_distribution(df, group_col=None, y_var='booking_rate_l30d',
     plt.legend()
     if save: 
         if filename==None:
-            filename="host_performance.jpg"
+            filename=f"host_performance_on_{y_var}.jpg"
         outpath_kde=os.path.join(output_folder,filename)
         plt.savefig(outpath_kde, dpi=300)
         plt.show()
-        print(f"[SAVE] plot distribution saved to {outpath_kde}!")
+        print(f"✅ [SAVE] plot distribution saved to {outpath_kde}!")
+        
     return  
 
 
@@ -704,6 +719,6 @@ def plot_violon(df_input, vars, to_fillna0=False, save=False,
         outpath_violon=os.path.join(output_folder,filename)
         plt.tight_layout()#必须在savefig前
         plt.savefig(outpath_violon, dpi=300)
-        print(f"[SAVE] violon plot saved to {outpath_violon}!")
+        print(f"✅ [SAVE] violon plot saved to {outpath_violon}!")
         
     return 

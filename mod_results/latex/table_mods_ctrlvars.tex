@@ -1,0 +1,28 @@
+\begin{table}
+\caption{Variables de contrôles dans les modèles de régression OLS}
+\label{tab:table_mods_keyvars}
+\begin{tabular}{llll}
+\toprule
+ & Basique & Tactiques   & x Superhôte \\
+\midrule
+C(host_identity_verified)[T.t] & \makecell{0.0092*\\(0.0048)} & \makecell{0.0093*\\(0.0048)} & \makecell{0.0091*\\(0.0048)} \\
+C(host_has_profile_pic)[T.t] & \makecell{-0.0001\\(0.0059)} & \makecell{0.0003\\(0.0059)} & \makecell{0.0000\\(0.0059)} \\
+C(lang)[T.fr] & \makecell{0.0103***\\(0.0031)} & \makecell{0.0092***\\(0.0034)} & \makecell{0.0092***\\(0.0034)} \\
+C(lang)[T.no_text] & \makecell{0.0081***\\(0.0030)} & \makecell{0.0090***\\(0.0032)} & \makecell{0.0090***\\(0.0032)} \\
+C(lang)[T.other_langs] & \makecell{0.0155\\(0.0101)} & \makecell{0.0173*\\(0.0102)} & \makecell{0.0177*\\(0.0102)} \\
+C(room_type)[T.Hotel room] & \makecell{-0.0408***\\(0.0086)} & \makecell{-0.0431***\\(0.0087)} & \makecell{-0.0442***\\(0.0087)} \\
+C(room_type)[T.Private room] & \makecell{0.0264***\\(0.0033)} & \makecell{0.0250***\\(0.0034)} & \makecell{0.0252***\\(0.0034)} \\
+C(room_type)[T.Shared room] & \makecell{0.0182\\(0.0119)} & \makecell{0.0163\\(0.0119)} & \makecell{0.0162\\(0.0119)} \\
+C(instant_bookable)[T.t] & \makecell{0.0155***\\(0.0024)} & \makecell{0.0160***\\(0.0025)} & \makecell{0.0154***\\(0.0025)} \\
+review_scores_rating & \makecell{-0.0006\\(0.0027)} & \makecell{-0.0010\\(0.0027)} & \makecell{-0.0012\\(0.0027)} \\
+years_since_host & \makecell{-0.0024***\\(0.0003)} & \makecell{-0.0026***\\(0.0003)} & \makecell{-0.0025***\\(0.0003)} \\
+professional_host & \makecell{0.0117***\\(0.0023)} & \makecell{0.0131***\\(0.0023)} & \makecell{0.0133***\\(0.0023)} \\
+len & \makecell{-0.0000\\(0.0000)} & \makecell{0.0000\\(0.0000)} & \makecell{0.0000\\(0.0000)} \\
+price & \makecell{-0.0000***\\(0.0000)} & \makecell{-0.0000***\\(0.0000)} & \makecell{-0.0000***\\(0.0000)} \\
+availability_30 & \makecell{-0.0079***\\(0.0001)} & \makecell{-0.0079***\\(0.0001)} & \makecell{-0.0079***\\(0.0001)} \\
+R² & 0.142 & 0.143 & 0.144 \\
+Adj. R² & 0.142 & 0.143 & 0.143 \\
+N & 37013 & 37013 & 37013 \\
+\bottomrule
+\end{tabular}
+\end{table}

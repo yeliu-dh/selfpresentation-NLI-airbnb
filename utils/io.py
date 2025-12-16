@@ -38,24 +38,20 @@ def save_csv_as_latex(table_csv, output_path, caption, label, round=4,
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
     df = table_csv.copy()
-    df=df.round(round)
-    
-    # # 只对数值列 round
-    # if round is not None:
-    #     num_cols = df.select_dtypes(include=['float', 'int']).columns
-    #     df[num_cols] = df[num_cols].round(round)
-
-        
     # 空值处理
     df = df.fillna('-')
+    # print(df.dtypes)
     
     # 将每个单元格换行的数值（比如 β \n (std)）用 makecell 包裹
     def wrap_cell(val):
         if isinstance(val, str) and '\n' in val:
             return r'\makecell{' + val.replace('\n','\\\\') + '}'
         return val
-    
     df = df.applymap(wrap_cell)
+
+    if round :
+        num_cols = df.select_dtypes(include='number').columns
+        df[num_cols] = df[num_cols].round(round)    
     
     # 生成 LaTeX
     latex_code = df.to_latex(
@@ -66,11 +62,16 @@ def save_csv_as_latex(table_csv, output_path, caption, label, round=4,
         longtable=False,
         multicolumn=True,
         multicolumn_format='c',
-        bold_rows=False
+        bold_rows=False,
+        float_format=lambda x: f"{x:.{round}f}" if isinstance(x, (int, float)) and round else x
+        # 对于数值型显示前round位
     )
+    # print(latex_code)
+    
     
     # 保存
     with open(output_path, 'w') as f:
         f.write(latex_code)
     
-    print(f"[SAVE] Table saved as LaTeX to {output_path}!\n")
+    print(f"☑️[SAVE] Table saved as LaTeX to {output_path}!\n")
+    return #latex_code
