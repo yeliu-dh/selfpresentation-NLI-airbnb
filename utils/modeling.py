@@ -317,8 +317,6 @@ def make_models_table(models_dict, vars_kp, ROUND=None,
                         index=True,
                         round=ROUND)
         
-        
-        
 
     return table_kp,table_ctrl
 
