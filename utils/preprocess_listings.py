@@ -8,8 +8,6 @@ import numpy as np
 import time
 from utils.io import save_csv_as_latex
 
-
-
 ##=============================DESC STAT=====================================##
 
 def print_nan_ratio(df, col):
@@ -65,11 +63,33 @@ def desc_catORnum(df, vars):
 
 
 
-
-
-
 ##==================================HOST VARS============================================##
 import langid #这个库速度更快、稳定性高。
+
+def is_valid_text(text):
+    """
+    filtrer les textes:
+        pas de nan,
+        pas que les ponctuation,
+        pas que les liens url
+        pas que les caractères
+    renvoyer T/F
+    """
+    if pd.isna(text):  # ==dropnaNaN
+        return False
+    text = str(text).strip()
+    if len(text) == 0:  # strip
+        return False
+    # effacer ce qui n'a que de ponctuation
+    if not re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ]", text):
+        return False
+        # effacer url
+    if re.fullmatch(r"https://\S+", text):
+        return False
+    return True
+
+
+
 def detect_language_langid(text):
     try:
         if isinstance(text, str) and text.strip():
@@ -241,11 +261,13 @@ def preprocess_host_variables(df_raw):
 
 
 
-
-
 ##==================================PROXY============================================##
 
-def filter_df(df, vars):
+def filter_df(df, vars, 
+              filtrate_by_booking_rate_l30d=False, 
+              filtrate_by_booking_rate_l90d=False,
+              ):
+    
     df_filtered=df.copy()
 
     # check vars :
@@ -254,6 +276,15 @@ def filter_df(df, vars):
     if len(missings_vars)>0:
         print(f"[WARNING] missing vars in df : {'; '.join(missings_vars)}!!")
     
+    if filtrate_by_booking_rate_l30d==False :
+        vars_valid=[ v for v in vars_valid if v not in [ 'number_of_reviews_l30d','availability_30','booking_rate_l30d']]
+        print("[CHECK] no filter on 'number_of_reviews_l30d','availability_30','booking_rate_l30d'!")
+    
+    if filtrate_by_booking_rate_l90d==False :
+        vars_valid=[ v for v in vars_valid if v not in [ 'number_of_reviews_nextQ','availability_90','booking_rate_l90d']]
+        print("[CHECK] no filter on  'number_of_reviews_nextQ','availability_90','booking_rate_l90d'!")
+        
+            
     # filter df
     for var in vars_valid :
         len_before=len(df_filtered)
@@ -269,7 +300,7 @@ def filter_df(df, vars):
 
 
 
-def check_proxy_vars(df,proxy_vars=['price',"availability_90"], get_boooking_rate_l30d=True):
+def check_proxy_vars(df,proxy_vars=['price',"availability_90"]):
    
     for var in proxy_vars:
         # price
@@ -280,20 +311,7 @@ def check_proxy_vars(df,proxy_vars=['price',"availability_90"], get_boooking_rat
                 .replace('[\$,]', '', regex=True)  # 去掉 $ 和 ,
                 .astype(float)                     # 转成数值
             )            
-            
-    if get_boooking_rate_l30d==True:
-        print(
-            f"- number_of_reviews_l30d: {print_nan_ratio(df, col='number_of_reviews_l30d')*100}% NaN'\n"
-            f"- availability_30: {print_nan_ratio(df, col='availability_30')*100}% NaN'\n"
-        )
-        df['booking_rate_l30d'] = df.apply(
-            lambda row: min(row['number_of_reviews_l30d'] / row['availability_30'], 1.0)
-            if row['availability_30'] > 0 else None,
-            axis=1
-        )
-        proxy_vars.extend(["number_of_reviews_l30d","availability_30","booking_rate_l30d"])
-        print(f"[INFO] proxy vars :{'; '.join(proxy_vars)}\n")
-        
+                    
     # filtrer :
     # init df_filtered:
     # if get_boooking_rate_l30d==True:
@@ -301,6 +319,46 @@ def check_proxy_vars(df,proxy_vars=['price',"availability_90"], get_boooking_rat
 
     return df, proxy_vars
 
+
+
+def add_booking_rate_l30d(df):
+    print(
+            f"- number_of_reviews_l30d: {print_nan_ratio(df, col='number_of_reviews_l30d')*100}% NaN'\n"
+            f"- availability_30: {print_nan_ratio(df, col='availability_30')*100}% NaN'\n"
+        )
+    df['booking_rate_l30d'] = df.apply(
+        lambda row: min(row['number_of_reviews_l30d'] / row['availability_30'], 1.0)
+        if row['availability_30'] > 0 else None,
+        axis=1
+    )      
+
+    return df 
+    
+  
+def add_booking_rate_l90d(df, df_nextQ):
+    # no match / neg value stay nan in number_of_reviewsQ3
+    
+    df_reviews=df.copy()
+    df_reviews=df_reviews.rename(columns={"number_of_reviews":'number_of_reviews_till_Q'})
+    
+    reviews_nextQ=df_nextQ[['id','number_of_reviews']]
+    reviews_nextQ.columns=['id','number_of_reviews_till_nextQ']
+    
+    df_reviews=df_reviews.merge(reviews_nextQ, left_on='id', right_on="id", how="left")
+    
+    df_reviews['number_of_reviews_nextQ']=df_reviews['number_of_reviews_till_nextQ']-df_reviews["number_of_reviews_till_Q"]
+    df_reviews['number_of_reviews_nextQ']=df_reviews['number_of_reviews_nextQ'].apply(lambda x : np.nan if x<0 else x)
+    
+    
+    print(f"no match in 'number_of_reviews_nextQ': {df_reviews.number_of_reviews_nextQ.isna().sum()}\n"
+        f"availability_90==0 =>nan: {len(df_reviews[df_reviews['availability_90']==0])}"
+          )
+    df_reviews['booking_rate_l90d'] = df_reviews.apply(
+                lambda row: min(row['number_of_reviews_nextQ'] / row['availability_90'], 1.0)
+                if row['availability_90'] > 0 else None,
+                axis=1
+            )
+    return df_reviews
 
 
 
@@ -321,11 +379,6 @@ def add_is_within_km(df, threshold_km):
         # …你可以继续补充其他场馆
     ])
 
-    # print(f"\n\n ==============================LOCATION=============================\n"
-            # f"CALCULATION METHODS :\n"
-            # f"-'latitude','longitude': \n 计算房源到各大主要venue的距离，果最小值<=5km, 则在is_within_5km上填't',反之'f'"
-            # f"venues_df :\n {venues_df}\n"
-            # )
     
     # 确保坐标数值化
     df['latitude'] = pd.to_numeric(df['latitude'], errors='coerce')
@@ -387,20 +440,24 @@ def categorize_property(ptype):
 
 
 
+
+###======================================MAIN of=================================================###
 ##==================================PROXY +OBJ+LOCATION ======================================##
 
-def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_90"], 
-                        get_boooking_rate_l30d=False, filtrate_by_booking_rate=False,#无输入时默认不按照booking筛选 
+def preprocess_obj_vars(df, df_nextQ, proxy_vars=['price',"availability_30","availability_90"], 
+                        get_booking_rate_l30d=False, filtrate_by_booking_rate_l30d=False,#无输入时默认不按照booking筛选 
+                        get_booking_rate_l90d=True, filtrate_by_booking_rate_l90d=False,
                         obj_vars=["room_type", 'property_type',"minimum_nights","instant_bookable"], 
                         threshold_km:int=None, 
                         output_folder="mod_results", filename="listings_filtered.csv"):
+    
     # obj_vars=["room_type", "minimum_nights","instant_bookable"]#all ok,无缺失/异常
     # proxy_vars=['price',"availability_90"]
     
     print(f"\n\n==========================PROXY + OBJ VARS============================\n"
         f"PROCESS PIPELINE :\n"
         f"1) process proxies : \n"
-        f"- price : delete '$', to_numeric\n"
+        f"- price : delete '$', to_numeric\n\n"
         
         f" 2) if get_boooking_rate_l30d==True, calculation method:\n"
         f"- booking_rate_l30d = number_of_reviews_l30d / availability_30 \n"
@@ -408,37 +465,50 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
         f" if availability_30 = 0, take NaN.\n"
         f" if booking_rate_l30d > 1, take 1.\n\n"
         
-        f"3) obj vars :\n "
+        
+        f"3) if 'add_booking_rate_l90d':\n"
+        f" ADD number_of_reviews_nextQ, booking_rate_l90d \n"
+        f" if host no longer exists in df_nextQ or substraction get negative value, number_of_reviews_nextQ=> nan \n"
+        f" booking_rate_l30d = number_of_reviews_nextQ (Q3)/ availability_90 (Q2)\n"
+        f" if filter False: no filter on booking_rate, ava, nb_reviews\n\n"
+
+        
+        f"4) obj vars :\n "
         f"- instant_bookable : fillna('f')\n"
         f"- minimum_nights : to_numeric, fillna(0)\n"
-        f"- property_type : clean col : entire, hotel, shared, private, others.\n"
+        f"- property_type : clean col : entire, hotel, shared, private, others.\n\n"
+
         
-        
-        f"3) filter : dropna on vars ==> desc df_filtered \n\n"
+        f"5) filter : dropna on vars ==> desc df_filtered \n\n"
         f"desc statistique :{', '.join(obj_vars)} \n\n"
         
-        f"4) if enter 'threshold_km':\n"
+        f"6) if enter 'threshold_km':\n"
         f"location :'latitude','longitude': ADD 'is_within_Xkm'\n"
-        f"calculate  distance bewtween listing and its cloest venue. if it's under {threshold_km} km, 'is_within_{threshold_km} km' ==1, else 0.\n"
-        )
+        f"calculate  distance bewtween listing and its cloest venue. if it's under {threshold_km} km, 'is_within_{threshold_km} km' ==1, else 0.\n\n"
+        
+        f"7) cols to keep : only keeps cols needed!\n\n")
+    
+    
     vars_to_dropna=[]    
      
     print("# ---------------------------proxy---------------------------")
     
-    df, proxy_vars=check_proxy_vars(df, proxy_vars=proxy_vars, 
-                                    get_boooking_rate_l30d=get_boooking_rate_l30d)
+    df, proxy_vars=check_proxy_vars(df, proxy_vars=proxy_vars)
+    
     vars_to_dropna.extend(proxy_vars)
     
-    # all_vars.extend(proxy_vars)    
-    # ## 单独写？
-    # if get_boooking_rate_l30d==True and filtrate_by_booking_rate==True:
-    #     print(f"len BEFORE filtrage of nan (availability==0) by 'booking_rate_l30d': {len(df_filtered)}")
-    #     df_filtered=df_filtered[df_filtered['booking_rate_l30d'].notna()]
-    #     print(f"len AFTER: {len(df_filtered)}\n")           
+    if get_booking_rate_l30d==True:
+        df=add_booking_rate_l30d(df)
+        vars_to_dropna.extend(["number_of_reviews_l30d","availability_30","booking_rate_l30d"])
     
-    # if get_boooking_rate_l30d==True:
-    #     all_vars.extend(['number_of_reviews_l30d',"booking_rate_l30d"])#?
+    if get_booking_rate_l90d==True :
+        if df_nextQ.empty:
+            print(f"[CHECK] need df_nextQ!!!")
+        else :
+            df=add_booking_rate_l90d(df, df_nextQ)
+        vars_to_dropna.extend(["number_of_reviews_nextQ","availability_90","booking_rate_l90d"])
     
+
     print("#------------------------ obj vars ---------------------------")
     if "instant_bookable" in obj_vars:
         df["instant_bookable"]=df["instant_bookable"].fillna("f")
@@ -467,7 +537,7 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
 
     if threshold_km!=None:    
         print('#-------------------------location------------------------')
-        df=add_is_within_km(df,threshold_km=3)
+        df=add_is_within_km(df,threshold_km=threshold_km)
         vars_to_dropna.append(f'is_within_{threshold_km}km')# extend (list)!        
         
         
@@ -475,14 +545,18 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
     vars_to_dropna=list(set(vars_to_dropna))
     print(f"[INFO] vars to dropna:{'; '.join(vars_to_dropna)}")
     
-    df_filtered=filter_df(df,vars=vars_to_dropna)
-    desc_catORnum(df=df_filtered, vars=vars_to_dropna) 
+    df_filtered=filter_df(df,vars=vars_to_dropna, 
+                          filtrate_by_booking_rate_l30d=filtrate_by_booking_rate_l30d,
+                          filtrate_by_booking_rate_l90d=filtrate_by_booking_rate_l90d)
     
-    # save
+    
+    desc_catORnum(df=df_filtered, vars=vars_to_dropna) 
+
+
+
     os.makedirs(output_folder, exist_ok=True)
     outpath_df_filtered=os.path.join(output_folder, filename)
     df_filtered.to_csv(outpath_df_filtered, index=False)
-    
     print(f"\n✅[SAVE] {len(df_filtered)} lines df_filtered saved to '{outpath_df_filtered}'!")
     
     return df_filtered
@@ -493,9 +567,86 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
 
 
 
+# --------------------------------------simplify------------------------------------------
+def keep_cols(df, cols_to_keep, 
+              save=True, output_folder=None, filename=None):
+
+    df_simple=df.copy()
+        
+    cols_to_keep_valid = [c for c in cols_to_keep if c in df_simple.columns]
+    cols_to_keep_missing = [c for c in cols_to_keep if c not in cols_to_keep_valid]
+    
+    if len(cols_to_keep_missing)>0:
+        print(f"[INFO] skip missing cols to keep :{'; '.join(cols_to_keep_missing)}!")
+
+    df_simple=df_simple[cols_to_keep_valid]
+    print(f"[INFO] df only keeps {df_simple.columns}!")
+    
+    if save:
+        os.makedirs(output_folder, exist_ok=True)
+        if filename==None:# fallback!
+            filename="listings_simple.csv"
+        outpath_df_simple=os.path.join(output_folder, filename)
+        df_simple.to_csv(outpath_df_simple, index=False)
+        
+        print(f"\n✅[SAVE] {len(df_simple)} df simple saved to '{outpath_df_simple}'!")
+    
+    return df_simple
+
+
+
+
+
+
+
+
+
+
+# ========================================process main=======================================
+
+
+"""
+df_processed=preprocess_host_variables(df)
+df_filtered=preprocess_obj_vars(df=df_processed, 
+                    proxy_vars=['price',"availability_30","availability_90"], 
+                    get_boooking_rate_l30d=False, filtrate_by_booking_rate=False,#无输入时默认不按照booking筛选 
+                    obj_vars=["room_type","instant_bookable"],#"minimum_nights"关系不大？ 
+                    threshold_km=1, 
+                    output_folder=OUPUT_FOLDER_PROCESSED, filename=f"listings_paris{ym}_filtered.csv")
+# optional : 
+df_simple=keep_cols(df=df_filtered, cols_to_keep=COLS_TO_KEEP, 
+        save=True, output_folder=OUPUT_FOLDER_PROCESSED, filename=f"listings_paris{ym}_simple.csv")
+        
+    
+"""
+
+
+
+# def get_df_unique(df, dropby:str, 
+#                 save, output_folder, filename):
+#     df_unique=df.copy()
+#     df_unique=df_unique.dropna(subset=dropby).drop_duplicates(subset=dropby)
+
+#     print(f"[INFO] df BEFORE dropna + drop duplicates: {len(df)};\n"
+#       f"AFTER : {len(df_unique)}")
+
+#     if save :
+#         os.makedirs(output_folder, exist_ok=True)
+#         if not filename:
+#             filename='listings_unique.csv'
+
+#         outpath_df_unique=os.path.join(output_folder, filename)
+#         df_filtered.to_csv(outpath_df_filtered, index=False)
+#         print(f"\n✅[SAVE] {len(df_unique)} lines df_filtered saved to '{outpath_df_unique}'!")
+    
+
+#     return df_unique
+
+
 
 
 ## ======================================DESC================================================##
+
 
 """
 # exemplaire :
@@ -512,26 +663,26 @@ cols_to_check=[
 """
 
 
-def group_mean_table(df, cols, group_col='host_is_superhost'):
-    """
-    生成一个表格，对指定cols在group_col的两组之间取均值。
+# def group_mean_table(df, cols, group_col='host_is_superhost'):
+#     """
+#     生成一个表格，对指定cols在group_col的两组之间取均值。
     
-    df: pandas DataFrame
-    cols: list of column names to observe
-    group_col: 分组列名，默认 'host_is_superhost'
+#     df: pandas DataFrame
+#     cols: list of column names to observe
+#     group_col: 分组列名，默认 'host_is_superhost'
     
-    返回: DataFrame，index=cols, 列=[Superhôte, Autres]
-    """
-    # 创建空DataFrame
-    result = pd.DataFrame(index=cols, columns=['Superhôte', 'Autres'])
+#     返回: DataFrame，index=cols, 列=[Superhôte, Autres]
+#     """
+#     # 创建空DataFrame
+#     result = pd.DataFrame(index=cols, columns=['Superhôte', 'Autres'])
     
-    for col in cols:
-        # 两组均值
-        result.loc[col, 'Superhôte'] = df[df[group_col]=='t'].get(col).mean()
-        result.loc[col, 'Autres']   = df[df[group_col]!='t'].get(col).mean()
-    
+#     for col in cols:
+#         # 两组均值
+#         result.loc[col, 'Superhôte'] = df[df[group_col]=='t'].get(col).mean()
+#         result.loc[col, 'Autres']   = df[df[group_col]!='t'].get(col).mean()
 
-    return result
+#     return result
+
 
 
 
@@ -642,7 +793,7 @@ def group_mean_table_ttest(df, cols_to_check, group_col='host_is_superhost',
                         output_path=outpath_latex, 
                         caption="Tableau du profil des Superhôtes et des Autres",
                         label="tab:table_host", 
-                        round=3)
+                        ndigits=3)
 
     return result
 
@@ -664,6 +815,7 @@ def plot_distribution(df, group_col=None, y_var='booking_rate_l30d',
     
 
     title= f"Distribution de {y_var}" 
+    
     if y_var=="booking_rate_l30d":
         title=f"Distribution de Taux de réservation" # no touch to y_var!
 
@@ -672,14 +824,19 @@ def plot_distribution(df, group_col=None, y_var='booking_rate_l30d',
         print(f'[INFO] groups of {group_col}:{groups}')
         
         group_title=f" ({group_col} {groups[0]} vs {groups[1]})" #开头空一格
+        
         if group_col=='host_is_superhost':
             group_title= " (Superhôtes vs Autres)"
+        
         title+=group_title
 
 
-        for i, val in enumerate(["t", "f"]):
+        # for i, val in enumerate(["t", "f"]):
+        for i, val in enumerate(groups):
             group_data = df[df[group_col]==val][y_var].dropna()
+            # print(i, group_data)
             label=i
+
             if group_col=="host_is_superhost":
                 label = "Superhôtes" if val=="t" else "Autres"
             
@@ -711,7 +868,7 @@ def plot_distribution(df, group_col=None, y_var='booking_rate_l30d',
 
 
 def plot_violon(df_input, vars, to_fillna0=False, save=False, 
-                output_folder="mod_results", filename=None):
+                output_folder=None, filename=None):
     
     import matplotlib.pyplot as plt
     import seaborn as sns

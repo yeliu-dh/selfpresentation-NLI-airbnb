@@ -641,7 +641,7 @@ output_folder='../mod_results'
  
 
 """
-def get_booking_rate_l30d(df):
+def add_booking_rate_l30d(df):
     if "number_of_reviews_l30d" not in df.columns or "availability_30" not in df.columns:
         print(f"[WARNING]number_of_reviews_l30d or availability_30 not in df!!!\n")
     else :        
@@ -679,7 +679,8 @@ def add_booking_rate_l90d(df, df_nextQ):
                 if row['availability_90'] > 0 else None,
                 axis=1
             )
-
+    print(f"nan in booking90: {len(df_reviews[df_reviews['booking_rate_l90d'].isna()])}/{len(df_reviews)}!")
+    
     return df_reviews
 
 

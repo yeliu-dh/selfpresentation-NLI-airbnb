@@ -207,15 +207,7 @@ def run_fa(path_df_items, items, output_folder="../output_fa",#fallback!
     
     if get_factor_scores_by  in ["mean","both"]:
         print(f"[INFO] calulate factor score by taking the average of its corresponding items, ref to a pre-defined map.\n")
-        
-        # fa_items_dict={
-        #     "ouverture":['open to different cultures','cosmopolitan','international view','cultural exchange'],
-        #     "authenticité":['personal life','life experiences','divers interests','hobbies','enjoy life'],
-        #     'sociabilité':['meet new people', 'welcoming', 'friendly','sociable', 'interpersonal interaction'],
-        #     'auto_promotion':['thoughtful service', 'attentive to needs','willing to help','responsive'],
-        #     'exemplarité':["fan of Airbnb","Airbnb community",'love Airbnb', 'travel with Airbnb']
-        # }
-        
+       
         if dict_factor_items:            
             fa_scores_mean = pd.DataFrame(index=data.index)
             for f, items in dict_factor_items.items():
@@ -265,7 +257,9 @@ def run_fa(path_df_items, items, output_folder="../output_fa",#fallback!
         # data
         loadings_scores = fa_scores.loadings_
         loadings_scores_df=pd.DataFrame(loadings_scores, index=df_scores.columns)
+    
         loadings_scores_df.columns=["Dimension 1","Dimension 2"]
+        print("LOADING SCORES DF")
         display(loadings_scores_df)
         # save as csv
         

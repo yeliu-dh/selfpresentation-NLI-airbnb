@@ -1,10 +1,11 @@
 sandboxMM1/*
 *.zip
 data/*
-
+data_*/*
 
 fa_results\lisitngs_*.csv
-
+mod_results/*
+output*/*
 
 
 # Byte-compiled / optimized / DLL files
