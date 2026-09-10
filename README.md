@@ -1,4 +1,4 @@
-> 🇫🇷 [Français](#version-française) · 🇬🇧 [English](#english-version) · 🇨🇳 [中文](#中文)
+> Languages : 🇫🇷 [Français](#version-française) · 🇬🇧 [English](#english-version) · 🇨🇳 [中文](#中文)
 
 
 # Version française:
@@ -37,71 +37,85 @@ Cette recherche étudie l’impact des tactiques de présentation de soi des hô
 - **Modération** : Le statut de Superhôte joue un rôle modérateur : il révèle l'effet négatif de l'auto-promotion, mais peut atténuer l'effet négatif de l'exemplarité. Les effets des autres tactiques restent inchangés.
 
 ## 🗂️ Structure du Projet
-- scripts : fichier `.ipynb` pour le prétraitement, l'analyse factorielle et la modélisation
-- utils : fonctions utilitaires
-- *_results : résultats des traitements et des analyses
+- **`scripts/`** : fichier `.ipynb` pour le prétraitement, l'analyse factorielle et la modélisation
+- **`utils/`** : fonctions utilitaires
+- **`*_results`** : résultats des traitements et des analyses
 
 ## ⚙️ Reproduction
-
 - **Python** : `3.10`
 - **Dépendances** : `pip install -r requirements.txt`
 - **Données** : non incluses ; scripts de reproduction fournis. Disponibles sur demande.
 
 
-# English version
+
+# English Version:
+
 # Self-Presentation and Host Performance on Airbnb: A Psychometric Approach Using Zero-Shot NLI
 
 ## 🔍 Abstract
 
-This research examines the impact of Airbnb hosts’ self-presentation tactics on their monthly booking rate and the moderating role of Superhost status, using a 22-item psychometric scale applied at scale through zero-shot NLI.
+This research examines the impact of Airbnb hosts’ self-presentation tactics on their booking rate and the moderating role of Superhost status, based on a 22-item psychometric scale applied at scale through zero-shot NLI.
 
-## 🏷️ 5 Tactics Adapted to the Airbnb Context
+## 🏷️ 5 Tactics Adapted to the Airbnb Context:
 
-* **Relational tactics**: openness · sociability · authenticity
-* **Promotional tactics**: self-promotion · exemplarity
+* **relational tactics**: Openness, sociability, authenticity
+
+* **promotional tactics**: Self-promotion, exemplification
 
 ## 📊 Dataset
 
-* **Source**: [Inside Airbnb](https://insideairbnb.com/get-the-data/)
-* **Sample**: Airbnb listings in Paris — December 2023
-* **Size**: ~75,000 listings
-* **Key variable**: host profile description (`host_about`)
+* Source: [Inside Airbnb](https://insideairbnb.com/get-the-data/)
+
+* Sample: Airbnb listings in Paris in December 2023
+
+* Size: ~ 75,000 listings
+
+* Key variable: host’s personal description (*host_about*)
 
 ## 🔬 Methodology
 
-### Scale Construction and Psychometric Validation
+### Scale Construction
 
-* **EFA** (*Exploratory Factor Analysis*)
-* **Psychometric validation**: Cronbach’s α · communalities · complexity
-* **Validated scale**: 22 descriptive items → 5 dimensions
+* EFA (Exploratory Factor Analysis)
+
+* Psychometric validation: Cronbach’s α, communalities, complexity
+
+* Validated scale: 5 tactics → 22 descriptive items
 
 ### Natural Language Inference (NLI)
 
-* **Multilingual zero-shot NLI**: item-level evaluation of the semantic presence of each item in the host descriptions
-* **Model**: [BGE-M3-ZeroShot-v2.0](https://huggingface.co/MoritzLaurer/bge-m3-zeroshot-v2.0)
-* **Weighted scores**: 22 item scores → 5 dimension scores
+* Multilingual zero-shot classification: evaluating the extent to which each item is semantically present in a given text
+
+* Model: [bge-m3-zeroshot-v2.0](https://huggingface.co/MoritzLaurer/bge-m3-zeroshot-v2.0)
+
+* Weighted scores: 22 item scores → 5 dimension scores
 
 ### Econometric Analysis
 
-* **Tactics & monthly booking rate**: OLS regression
-* **Superhosts vs. other hosts**: OLS with interaction term · t-test · Cohen’s *d*
+* Tactics & monthly booking rate: OLS regression
+
+* Superhost vs. Others: OLS with interaction term, t-test, Cohen’s *d*
 
 ## 💡 Main Results
 
-* **Prevalence**: Self-promotion and exemplarity are the most common tactics.
+* **Prevalence**: Self-promotion and exemplarity are the most common;
 
-* **Impact**: Sociability and authenticity increase the booking rate, while exemplarity has a negative effect. The other tactics show no significant effects.
+* **Impact**: Sociability and authenticity increase the booking rate, while exemplarity has a negative effect; the others show no significant effect;
 
-* **Moderation**: Superhost status reveals the negative effect of self-promotion but may attenuate the negative effect of exemplarity. The effects of the other tactics remain unchanged.
+* **Moderation**: Superhost status plays a moderating role: it reveals the negative effect of self-promotion, but may attenuate the negative effect of exemplarity. The effects of the other tactics remain unchanged.
 
 ## 🗂️ Project Structure
 
-* **`scripts/`**: `.ipynb` notebooks for preprocessing, factor analysis, and modeling
+* **`scripts/`**: `.ipynb` file for preprocessing, factor analysis, and modeling
+
 * **`utils/`**: utility functions
-* **`*_results/`**: results from the different analyses and processing steps
+
+* **`*_results`**: results of the processing and analyses
 
 ## ⚙️ Reproduction
 
 * **Python**: `3.10`
+
 * **Dependencies**: `pip install -r requirements.txt`
-* **Data**: not included in the repository; reproduction scripts are provided. Data available upon request.
+
+* **Data**: not included; reproduction scripts provided. Available upon request.
