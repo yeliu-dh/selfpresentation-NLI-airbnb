@@ -1,11 +1,11 @@
-#  L'impact des tactiques de présentation de soi sur la performance des transactions au sein des platformes C2C
+#  Présentation de soi et performance des hôtes sur Airbnb : une approche psychométrique par NLI zero-shot
 
 ## 🔍 Résumé
-Fondée sur la théorie de la présentation de soi et de la gestion des impressions de Goffman, cette recherche étudie les stratégies de présentation de soi des hôtes Airbnb à travers leurs descriptions personnelles. Elle développe une échelle de mesure psychométrique pour mesurer les cinq tactiques de présentation de soi des hôtes, puis l’applique à grande échelle à l’aide d’un modèle de classification zero-shot. Les dimensions identifiées sont ensuite analysées par régression OLS afin d’évaluer leur effet sur la performance des hôtes et leur interaction avec le statut de Superhôte.
+Cette recherche étudie l’impact des tactiques de présentation de soi des hôtes Airbnb sur leur taux de réservation et le rôle modérateur du statut de Superhôte, à partir d’une échelle psychométrique de 22 items appliquée à grande échelle par NLI zero-shot.
 
 ## 🏷️ 5 tactiques adaptées au contexte d’Airbnb:
-- tactiques relationnelles : Ouveture, sociabilité, authenticité
-- tactiques promotionnelles : Auto-promotion, exemplarité
+- **tactiques relationnelles** : Ouveture, sociabilité, authenticité
+- **tactiques promotionnelles** : Auto-promotion, exemplarité
 
 ## 📊 Jeu de données 
 - Source : [Inside Airbnb](https://insideairbnb.com/get-the-data/)  
@@ -29,9 +29,9 @@ Fondée sur la théorie de la présentation de soi et de la gestion des impressi
 - Superhôte vs. Autres : OLS avec terme d'intéraction, t-test, Cohen's *d*
 
 ## 💡 Résultats principaux
-- L’**auto-promotion** et l’**exemplarité** sont les plus courantes;
-- La **sociabilité** et l’**authenticité** augmentent le taux de réservation, alors que l’**exemplarité** a un effet négatif, d'autres ne présentent pas d'effet significatif; 
-- Le statut de **Superhôte** joue un rôle modérateur : il révèle l'effet négatif de l'**auto-promotion** , mais peut atténuer l'effet négatif de l'**exemplarité**. Les effets des autres tactiques restent inchangés.
+- **Prévalence** : L’auto-promotion et l’exemplarité sont les plus courantes;
+- **Impact** :La sociabilité et l’authenticité augmentent le taux de réservation, alors que l’exemplarité a un effet négatif, d'autres ne présentent pas d'effet significatif; 
+- **Interaction** : Le statut de Superhôte joue un rôle modérateur : il révèle l'effet négatif de l'auto-promotion, mais peut atténuer l'effet négatif de l'exemplarité. Les effets des autres tactiques restent inchangés.
 
 ## 🗂️ Structure du Projet
 - scripts : fichier `.ipynb` pour le prétraitement, l'analyse factorielle et la modélisation
