@@ -1,5 +1,10 @@
 #  Présentation de soi et performance des hôtes sur Airbnb : une approche psychométrique par NLI zero-shot
 
+> **Note** — Première partie de mon mémoire de master.  
+> 🇫🇷 [Français](#Version française) · 🇬🇧 [English](#english) · 🇨🇳 [中文](#中文)
+
+
+## Version française:
 ## 🔍 Résumé
 Cette recherche étudie l’impact des tactiques de présentation de soi des hôtes Airbnb sur leur taux de réservation et le rôle modérateur du statut de Superhôte, à partir d’une échelle psychométrique de 22 items appliquée à grande échelle par NLI zero-shot.
 
