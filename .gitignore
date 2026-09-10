@@ -7,6 +7,9 @@ fa_results\lisitngs_*.csv
 mod_results/*
 output*/*
 
+# mémoire, articles, ppt...
+latexMM1/*
+paper/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
