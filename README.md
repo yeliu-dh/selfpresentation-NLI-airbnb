@@ -26,18 +26,13 @@ Fondée sur la théorie de la présentation de soi et de la gestion des impressi
 
 ### Analyse économétrique 
 - Tactiques & taux de réservation mensuel : régression OLS  
-- Superhôte vs. Autres : OLS avec terme d'intéraction, t-test, Cohen's d
+- Superhôte vs. Autres : OLS avec terme d'intéraction, t-test, Cohen's *d*
 
-## 📊 Résultats principaux
+## Résultats principaux
 - L’**auto-promotion** et l’**exemplarité** sont les plus courantes;
-- La **sociabilité** et l’**authenticité** élève le taux de réservation, alors que l’**exemplarité** est contre-productif, d'autres ne sont pas significatives; 
-- Le statut de **Superhôte** joue un rôle modérateur, il active l'effet négatif de l'**auto-promotion** , mais peut atténuer l'effet négatif de l'**exemplarité**. D'autres tactiques restent constantes.
+- La **sociabilité** et l’**authenticité** augmentent le taux de réservation, alors que l’**exemplarité** a un effet négatif, d'autres ne présentent pas d'effet significatif; 
+- Le statut de **Superhôte** joue un rôle modérateur : il révèle l'effet négatif de l'**auto-promotion** , mais peut atténuer l'effet négatif de l'**exemplarité**. Les effets des autres tactiques restent inchangés.
 
-## Structure du projet
-
-
-
-## Limites 
 
 
 
