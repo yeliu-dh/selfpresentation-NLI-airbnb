@@ -31,7 +31,7 @@ Cette recherche étudie l’impact des tactiques de présentation de soi des hô
 ## 💡 Résultats principaux
 - **Prévalence** : L’auto-promotion et l’exemplarité sont les plus courantes;
 - **Impact** :La sociabilité et l’authenticité augmentent le taux de réservation, alors que l’exemplarité a un effet négatif, d'autres ne présentent pas d'effet significatif; 
-- **Interaction** : Le statut de Superhôte joue un rôle modérateur : il révèle l'effet négatif de l'auto-promotion, mais peut atténuer l'effet négatif de l'exemplarité. Les effets des autres tactiques restent inchangés.
+- **Modération** : Le statut de Superhôte joue un rôle modérateur : il révèle l'effet négatif de l'auto-promotion, mais peut atténuer l'effet négatif de l'exemplarité. Les effets des autres tactiques restent inchangés.
 
 ## 🗂️ Structure du Projet
 - scripts : fichier `.ipynb` pour le prétraitement, l'analyse factorielle et la modélisation
