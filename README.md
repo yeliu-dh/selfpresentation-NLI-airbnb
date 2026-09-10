@@ -1,4 +1,4 @@
-> Languages : 🇫🇷 [Français](#version-française) · 🇬🇧 [English](#english-version) · 🇨🇳 [中文](#中文)
+> Languages : 🇫🇷 [Français](#version-française) · 🇬🇧 [English](#english-version) · 🇨🇳 [中文](#中文版介绍)
 
 
 # Version française:
@@ -119,3 +119,76 @@ This research examines the impact of Airbnb hosts’ self-presentation tactics o
 * **Dependencies**: `pip install -r requirements.txt`
 
 * **Data**: not included; reproduction scripts provided. Available upon request.
+
+
+
+# 中文版介绍
+# Airbnb房东自我呈现与房东绩效：基于零样本NLI的心理测量学方法
+
+## 🔍 摘要
+
+本研究基于一套包含22个条目的心理测量量表，并通过零样本NLI进行大规模应用，研究Airbnb房东的自我呈现策略对其预订率的影响，以及超级房东勋章的调节作用。
+
+## 🏷️ 适用于Airbnb情境的5种策略：
+
+* **关系型策略**：开放性、社交性、真实性
+
+* **促销型策略**：自我推销、榜样化
+
+## 📊 数据集
+
+* 数据来源：[Inside Airbnb](https://insideairbnb.com/get-the-data/)
+
+* 样本：2023年12月巴黎的Airbnb房源
+
+* 规模：~ 75,000条房源
+
+* 关键变量：房东个人描述（*host_about*）
+
+## 🔬 研究方法
+
+### 量表构建
+
+* EFA（探索性因子分析）
+
+* 心理测量学验证：Cronbach’s α、共同度、复杂度
+
+* 验证后的量表：5种策略 → 22个描述性条目
+
+### 自然语言推理（NLI）
+
+* 多语言零样本分类：评估每个条目在给定文本中以语义方式呈现的程度
+
+* 大语言模型：[bge-m3-zeroshot-v2.0](https://huggingface.co/MoritzLaurer/bge-m3-zeroshot-v2.0)
+
+* 加权得分：22个条目得分 → 5个维度得分
+
+### 计量经济学分析
+
+* 策略与月度预订率的相关度：OLS回归
+
+* 超级房东 vs. 其他房东：带交互项的OLS、t检验、Cohen’s *d*
+
+## 💡 主要研究结果
+
+* **普遍性**：自我推销和示范性是最常见的策略；
+
+* **影响**：社交性和真实性提高预订率，而示范性具有负向影响；其他策略没有显著影响；
+
+* **调节作用**：Superhost身份发挥调节作用：它揭示了自我推销的负向影响，但可能减弱示范性的负向影响。其他策略的影响保持不变。
+
+## 🗂️ 项目结构
+
+* **`scripts/`**：用于数据预处理、因子分析和建模的`.ipynb`文件
+
+* **`utils/`**：工具函数
+
+* **`*_results`**：处理和分析结果
+
+## ⚙️ 复现
+
+* **Python**：`3.10`
+
+* **依赖**：`pip install -r requirements.txt`
+
+* **数据**：仓库未包含原始数据；提供复现脚本，按需提供数据。
