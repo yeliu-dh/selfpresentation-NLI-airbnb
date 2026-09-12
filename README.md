@@ -17,30 +17,30 @@ Cette recherche étudie l’impact des tactiques de présentation de soi des hô
 
 ## 🔬 Méthodologie 
 ### Pipeline
-        Définition du construit                        
-                │                           
-        Analyse qualitative    
-                │                        
-    ┌─> Echantillon des          
-    |    items descriptifs    
-    |           │                   
-    |     Traitement NLI
-    |  Classification zéro-shot           
-    |   (bge-m3-zeroshot-v2.0)       
-    |           │                        
-    |   Analyse factorielle 
-    |    exploratoire (EFA)                 
-    |           |                   
-    | Validation psychométrique 
-    |    (Chronbah'α, commnalité,
-    |        complexité)           
-    |           |                   
-    └────────── |
-                |                   
-         Echelle validée                                      
-                |                   
-         Scores pondérés 
-         des tactiques            
+                Définition du construit                        
+                        │                           
+                Analyse qualitative    
+                        │                        
+            ┌─> Echantillon des          
+            |   items descriptifs    
+            |           │                   
+            |     Traitement NLI
+            |  Classification zéro-shot           
+            |   (bge-m3-zeroshot-v2.0)       
+  Révision  |           │                        
+  des items |   Analyse factorielle 
+            |    exploratoire (EFA)                 
+            |           |                   
+            | Validation psychométrique 
+            |   (Chronbah'α, commnalité,
+            |        complexité)           
+            |           |                   
+            └────────── |
+                        |                   
+                Echelle validée                                      
+                        |                   
+                Scores pondérés 
+                des tactiques            
         
 
 ### Construction de l'échelle
