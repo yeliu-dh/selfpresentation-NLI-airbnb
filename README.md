@@ -44,7 +44,6 @@ Cette recherche étudie l’impact des tactiques de présentation de soi des hô
                 des tactiques 
 
 ```
-
 ### Construction de l'échelle
 - EFA (Exploratory Factor Analysis)
 - Validation psychométrique: Cronbash's α, communalités, complexité
@@ -100,6 +99,32 @@ This research examines the impact of Airbnb hosts’ self-presentation tactics o
 * Key variable: host’s personal description (*host_about*)
 
 ## 🔬 Methodology
+### Pipeline 
+```
+                Construct Definition                        
+                        │                           
+                Qualitative Analysis    
+                        │                        
+            ┌─────> Sample of          
+            |   Descriptive Items    
+            |           │                   
+            |     NLI Processing
+            |  Zero-Shot Classification           
+            |    (bge-m3-zeroshot-v2.0)       
+            |           │
+  Revision  |   Exploratory Factor Analysis (EFA)
+  of Items  |           |
+            |   Psychometric Validation 
+            |   (Cronbach's α, Communality,
+            |        Complexity)                   
+            |           |                   
+            └────────── |
+                        |                   
+                  Validated scale       
+                        |                   
+                Weighted Tactical Scores
+
+```
 
 
 ### Scale Construction
@@ -174,6 +199,31 @@ This research examines the impact of Airbnb hosts’ self-presentation tactics o
 * 关键变量：房东个人描述（*host_about*）
 
 ## 🔬 研究方法
+### 流程图
+```
+                  定义构念                        
+                     │                           
+                  定性分析    
+                     │                        
+            ┌─> 描述性条目样本          
+            |        │                   
+            |    自然语言推理
+            |     零样本分类           
+            |   (bge-m3-zeroshot-v2.0)       
+    条目    |        │
+    迭代    |   探索性因子分析（EFA）
+            |        |                   
+            |     心理测量学验证 
+            | （Cronbach's α、共同度、
+            |        复杂度）                   
+            |        |                   
+            └─────── |
+                     |                   
+                 验证后的量表                                      
+                     |                   
+                 加权得分
+
+```
 
 ### 量表构建
 
