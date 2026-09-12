@@ -213,15 +213,15 @@ This research examines the impact of Airbnb hosts’ self-presentation tactics o
     条目    |        │
     迭代    |   探索性因子分析（EFA）
             |        |                   
-            |     心理测量学验证 
+            |   心理测量学验证 
             | （Cronbach's α、共同度、
             |        复杂度）                   
             |        |                   
             └─────── |
                      |                   
-                 验证后的量表                                      
+                  有效量表                                      
                      |                   
-                 加权得分
+                  加权得分
 
 ```
 
