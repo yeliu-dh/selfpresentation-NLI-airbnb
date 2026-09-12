@@ -18,7 +18,7 @@ Cette recherche étudie l’impact des tactiques de présentation de soi des hô
 ## 🔬 Méthodologie 
 ### Pipeline         
         
-Définition du construit                        
+            Définition du construit                        
                         │                           
                 Analyse qualitative    
                         │                        
