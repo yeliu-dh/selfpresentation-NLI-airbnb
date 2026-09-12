@@ -17,7 +17,7 @@ Cette recherche étudie l’impact des tactiques de présentation de soi des hô
 
 ## 🔬 Méthodologie 
 ### Pipeline         
-        
+```
             Définition du construit                        
                         │                           
                 Analyse qualitative    
@@ -43,6 +43,7 @@ Cette recherche étudie l’impact des tactiques de présentation de soi des hô
                 Scores pondérés 
                 des tactiques 
 
+```
 
 ### Construction de l'échelle
 - EFA (Exploratory Factor Analysis)
