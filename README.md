@@ -1,5 +1,4 @@
-> Languages : 🇫🇷 [Français](#version-française) · 🇬🇧 [English](#english-version) · 🇨🇳 [中文](#中文版介绍)
-
+> Languages : 🇫🇷 [Français](#version-française) · 🇬🇧 [English](#english-version) · 🇨🇳 [中文](#中文版介绍) 
 
 # Version française:
 #  Présentation de soi et performance des hôtes sur Airbnb : une approche psychométrique par NLI zero-shot
@@ -17,6 +16,33 @@ Cette recherche étudie l’impact des tactiques de présentation de soi des hô
 - Variable clé : description personnelle de l'hôte (*host_about*)
 
 ## 🔬 Méthodologie 
+### Pipeline
+        Définition du construit                        
+                │                           
+        Analyse qualitative    
+                │                        
+    ┌─> Echantillon des          
+    |    items descriptifs    
+    |           │                   
+    |     Traitement NLI
+    |  Classification zéro-shot           
+    |   (bge-m3-zeroshot-v2.0)       
+    |           │                        
+    |   Analyse factorielle 
+    |    exploratoire (EFA)                 
+    |           |                   
+    | Validation psychométrique 
+    |    (Chronbah'α, commnalité,
+    |        complexité)           
+    |           |                   
+    └────────── |
+                |                   
+         Echelle validée                                      
+                |                   
+         Scores pondérés 
+         des tactiques            
+        
+
 ### Construction de l'échelle
 - EFA (Exploratory Factor Analysis)
 - Validation psychométrique: Cronbash's α, communalités, complexité
@@ -36,7 +62,7 @@ Cette recherche étudie l’impact des tactiques de présentation de soi des hô
 - **Impact** :La sociabilité et l’authenticité augmentent le taux de réservation, alors que l’exemplarité a un effet négatif, d'autres ne présentent pas d'effet significatif; 
 - **Modération** : Le statut de Superhôte joue un rôle modérateur : il révèle l'effet négatif de l'auto-promotion, mais peut atténuer l'effet négatif de l'exemplarité. Les effets des autres tactiques restent inchangés.
 
-## 🗂️ Structure du Projet
+## 🗂️ Structure du projet
 - **`scripts/`** : fichier `.ipynb` pour le prétraitement, l'analyse factorielle et la modélisation
 - **`utils/`** : fonctions utilitaires
 - **`*_results`** : résultats des traitements et des analyses
@@ -47,9 +73,8 @@ Cette recherche étudie l’impact des tactiques de présentation de soi des hô
 - **Données** : non incluses ; scripts de reproduction fournis. Disponibles sur demande.
 
 
-
+---
 # English Version:
-
 # Self-Presentation and Host Performance on Airbnb: A Psychometric Approach Using Zero-Shot NLI
 
 ## 🔍 Abstract
@@ -73,7 +98,6 @@ This research examines the impact of Airbnb hosts’ self-presentation tactics o
 * Key variable: host’s personal description (*host_about*)
 
 ## 🔬 Methodology
-
 ### Scale Construction
 
 * EFA (Exploratory Factor Analysis)
@@ -123,7 +147,7 @@ This research examines the impact of Airbnb hosts’ self-presentation tactics o
 
 
 # 中文版介绍
-# Airbnb房东自我呈现与房东绩效：基于零样本NLI的心理测量学方法
+# 爱彼迎房东自我展示策略与预定绩效：基于多维心理测量和零样本分类的计算分析
 
 ## 🔍 摘要
 
